@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新能源物流车队协同调度仿真</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1>新能源物流车队协同调度仿真平台</h1>
+            <div class="status-bar">
+                <span id="sim-time">时间: 0</span>
+                <span id="sim-score">得分: 0</span>
+                <span id="sim-status">状态: 就绪</span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="control-panel">
+                <div class="panel-section">
+                    <h3>仿真控制</h3>
+                    <button id="btn-init" class="btn btn-primary">初始化</button>
+                    <button id="btn-start" class="btn btn-success" disabled>开始</button>
+                    <button id="btn-pause" class="btn btn-warning" disabled>暂停</button>
+                    <button id="btn-reset" class="btn btn-danger">重置</button>
+                </div>
+
+                <div class="panel-section">
+                    <h3>参数设置</h3>
+                    <label>车辆数量: <input type="number" id="config-vehicles" value="10" min="1" max="20"></label>
+                    <label>任务数量: <input type="number" id="config-tasks" value="100" min="10" max="500"></label>
+                    <label>仿真速度: <input type="range" id="config-speed" value="1" min="0.5" max="10" step="0.5"></label>
+                    <label>调度策略:
+                        <select id="config-scheduler">
+                            <option value="insertion">插入启发式</option>
+                            <option value="nearest">最近优先</option>
+                            <option value="max_weight">最大重量优先</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="panel-section">
+                    <h3>实时统计</h3>
+                    <div class="stat-item">已完成: <span id="stat-completed">0</span></div>
+                    <div class="stat-item">已超时: <span id="stat-failed">0</span></div>
+                    <div class="stat-item">待分配: <span id="stat-pending">0</span></div>
+                    <div class="stat-item">运输中: <span id="stat-active">0</span></div>
+                </div>
+            </aside>
+
+            <main class="map-container">
+                <canvas id="sim-canvas"></canvas>
+                <div class="legend">
+                    <div class="legend-item"><span class="icon depot"></span> 仓库</div>
+                    <div class="legend-item"><span class="icon station"></span> 充电站</div>
+                    <div class="legend-item"><span class="icon pickup"></span> 取货点</div>
+                    <div class="legend-item"><span class="icon delivery"></span> 送货点</div>
+                    <div class="legend-item"><span class="icon vehicle"></span> 车辆</div>
+                </div>
+            </main>
+
+            <aside class="info-panel">
+                <div class="panel-section">
+                    <h3>车辆状态</h3>
+                    <div id="vehicle-list" class="scrollable-list"></div>
+                </div>
+                <div class="panel-section">
+                    <h3>任务列表</h3>
+                    <div id="task-list" class="scrollable-list"></div>
+                </div>
+                <div class="panel-section">
+                    <h3>充电站状态</h3>
+                    <div id="station-list" class="scrollable-list"></div>
+                </div>
+            </aside>
+        </div>
+
+        <footer class="log-panel">
+            <h4>运行日志</h4>
+            <div id="log-output" class="log-content"></div>
+        </footer>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="js/socket_client.js"></script>
+    <script src="js/map_renderer.js"></script>
+    <script src="js/vehicle_renderer.js"></script>
+    <script src="js/task_renderer.js"></script>
+    <script src="js/station_renderer.js"></script>
+    <script src="js/ui_controller.js"></script>
+</body>
+</html>
