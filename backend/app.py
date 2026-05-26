@@ -1,8 +1,12 @@
 """Flask + SocketIO web service for EV Fleet Simulation."""
 
 import os
+import sys
 import threading
 from typing import Optional
+
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, emit
