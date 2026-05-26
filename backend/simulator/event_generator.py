@@ -42,7 +42,7 @@ class EventGenerator:
 
             weight = round(random.uniform(*self.weight_range), 2)
             ready_time = t
-            due_time = t + random.randint(30, 150)
+            due_time = t + random.randint(300, 800)
 
             self.schedule.append({
                 "id": i + 1,
@@ -73,3 +73,7 @@ class EventGenerator:
         if self.schedule:
             return self.schedule[0]["create_time"]
         return None
+
+    def get_all_tasks(self) -> List[dict]:
+        """Return all pre-generated task data without consuming schedule."""
+        return self.schedule.copy()

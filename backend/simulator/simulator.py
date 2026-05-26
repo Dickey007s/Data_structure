@@ -11,6 +11,7 @@ from backend.scheduler.base_scheduler import BaseScheduler
 from backend.scheduler.nearest_first_scheduler import NearestFirstScheduler
 from backend.scheduler.max_weight_scheduler import MaxWeightScheduler
 from backend.scheduler.insertion_scheduler import InsertionScheduler
+from backend.scheduler.global_or_scheduler import GlobalORScheduler
 from backend.simulator.event_generator import EventGenerator
 
 
@@ -32,9 +33,17 @@ class Simulator:
         self.tick_interval = config.get("tick_interval", 1)
         self.sim_speed = config.get("sim_speed", 1.0)
         self.real_time_step = 0.1 / self.sim_speed
+        self.scheduler_type = config.get("scheduler", "insertion")
 
         self._emit_state: Optional[Callable] = None
         self._emit_finished: Optional[Callable] = None
+
+        # Metrics tracking
+        self.total_distance_traveled: List[float] = []
+        self.total_charging_time = 0.0
+        self.charging_count = 0
+        self.vehicle_moving_time: List[float] = []
+        self._charging_start_times: Dict[int, float] = {}
 
     def initialize(
         self,
@@ -44,6 +53,8 @@ class Simulator:
         scheduler_type: str,
     ) -> None:
         """Initialize simulation environment."""
+        self.scheduler_type = scheduler_type
+
         # Create map
         self.map = TransportMap(map_config["width"], map_config["height"])
         self.map.generate_grid(
@@ -51,21 +62,26 @@ class Simulator:
             num_stations=len(station_config),
         )
 
-        # Add charging stations
-        for sc in station_config:
-            station = ChargingStation(**sc)
+        # Add charging stations (use actual station nodes from generated map)
+        for i, sc in enumerate(station_config):
+            node_id = self.map.station_nodes[i % len(self.map.station_nodes)]
+            station = ChargingStation(
+                id=sc.get("id", i),
+                node_id=node_id,
+                total_slots=sc.get("total_slots", 2),
+                charge_rate=sc.get("charge_rate", 10.0),
+            )
             self.charging_stations.append(station)
-            if sc["node_id"] not in self.map.station_nodes:
-                self.map.station_nodes.append(sc["node_id"])
-            if sc["node_id"] in self.map.nodes:
-                x, y, _ = self.map.nodes[sc["node_id"]]
-                self.map.nodes[sc["node_id"]] = (x, y, "station")
 
         # Create fleet
         for fc in fleet_config:
             vehicle = Vehicle(**fc)
             vehicle.position = self.map.get_node_position(fc["start_node"])
             self.fleet.append(vehicle)
+
+        # Initialize metrics arrays
+        self.total_distance_traveled = [0.0] * len(self.fleet)
+        self.vehicle_moving_time = [0.0] * len(self.fleet)
 
         # Set scheduler
         self.scheduler = self._create_scheduler(scheduler_type)
@@ -78,6 +94,17 @@ class Simulator:
         )
         self.event_generator.generate_schedule()
 
+        # Global OR mode: pre-create all tasks and pre-assign
+        if scheduler_type == "global_or":
+            all_tasks_data = self.event_generator.get_all_tasks()
+            all_tasks = [Task(**data) for data in all_tasks_data]
+            self.scheduler.preassign_all_tasks(all_tasks, self.fleet, self.map)
+            self.active_tasks = all_tasks
+            # Pre-mark tasks as assigned (they will execute when ready_time is reached)
+            for task in all_tasks:
+                if task.status == Task.STATUS_PENDING and task.assigned_vehicle is not None:
+                    task.status = Task.STATUS_ASSIGNED
+
     def _create_scheduler(self, scheduler_type: str) -> BaseScheduler:
         """Factory method for schedulers."""
         if scheduler_type == "nearest":
@@ -86,45 +113,61 @@ class Simulator:
             return MaxWeightScheduler()
         elif scheduler_type == "insertion":
             return InsertionScheduler()
+        elif scheduler_type == "global_or":
+            return GlobalORScheduler()
         else:
             raise ValueError(f"Unknown scheduler type: {scheduler_type}")
 
     def tick(self) -> dict:
         """Advance one simulation tick and return state snapshot."""
-        self.current_time += self.tick_interval
+        try:
+            self.current_time += self.tick_interval
 
-        # 1. Generate new tasks
-        if self.event_generator:
-            new_tasks = self.event_generator.generate(self.current_time)
-            for task in new_tasks:
-                self.active_tasks.append(task)
-                if self.scheduler:
-                    assigned = self.scheduler.assign_task(task, self.fleet, self.map)
-                    if not assigned:
-                        task.status = Task.STATUS_PENDING
+            # 1. Generate new tasks
+            if self.scheduler_type != "global_or":
+                if self.event_generator:
+                    new_tasks = self.event_generator.generate(self.current_time)
+                    for task in new_tasks:
+                        self.active_tasks.append(task)
+                        if self.scheduler:
+                            assigned = self.scheduler.assign_task(task, self.fleet, self.map)
+                            if not assigned:
+                                task.status = Task.STATUS_PENDING
+            # global_or mode: tasks are already pre-created and pre-assigned
 
-        # 2. Update each vehicle
-        for vehicle in self.fleet:
-            self._update_vehicle(vehicle)
+            # 2. Update each vehicle
+            for vehicle in self.fleet:
+                self._update_vehicle(vehicle)
 
-        # 3. Update charging stations
-        for station in self.charging_stations:
-            station.tick(self.tick_interval)
+            # 3. Update charging stations
+            for station in self.charging_stations:
+                completed = station.tick(self.tick_interval)
+                # Record charging completion time
+                for vehicle in completed:
+                    if vehicle.id in self._charging_start_times:
+                        duration = self.current_time - self._charging_start_times[vehicle.id]
+                        self.total_charging_time += duration
+                        del self._charging_start_times[vehicle.id]
 
-        # 4. Check timeout tasks
-        for task in self.active_tasks[:]:
-            if task.is_timeout(self.current_time):
-                task.status = Task.STATUS_TIMEOUT
-                self.failed_tasks.append(task)
-                self.active_tasks.remove(task)
+            # 4. Check timeout tasks
+            for task in self.active_tasks[:]:
+                if task.is_timeout(self.current_time):
+                    task.status = Task.STATUS_TIMEOUT
+                    self.failed_tasks.append(task)
+                    self.active_tasks.remove(task)
 
-        # 5. Handle low battery
-        self._handle_low_battery()
+            # 5. Handle low battery
+            self._handle_low_battery()
 
-        # 6. Calculate score
-        score = self._calculate_score()
+            # 6. Calculate score
+            score = self._calculate_score()
 
-        return self._get_state_snapshot(score)
+            return self._get_state_snapshot(score)
+        except Exception as e:
+            import traceback
+            print(f"[Simulator.tick] Error at time {self.current_time}: {e}")
+            traceback.print_exc()
+            return self._get_state_snapshot(self._calculate_score())
 
     def _update_vehicle(self, vehicle: Vehicle) -> None:
         """Update a single vehicle's state."""
@@ -149,9 +192,18 @@ class Simulator:
         current_node_id = vehicle.current_path_nodes[vehicle.current_path_index]
         next_node_id = vehicle.current_path_nodes[vehicle.current_path_index + 1]
 
+        # Check battery: stop if depleted or cannot reach next node
+        segment_distance = self.map.get_distance(current_node_id, next_node_id)
+        consumption = vehicle.get_consumption_rate() * segment_distance
+        if vehicle.current_battery <= 0 or vehicle.current_battery < consumption * 0.5:
+            vehicle.status = VehicleStatus.IDLE
+            vehicle.current_path_nodes = []
+            vehicle.current_path_index = 0
+            vehicle.progress = 0.0
+            return
+
         current_pos = self.map.get_node_position(current_node_id)
         next_pos = self.map.get_node_position(next_node_id)
-        segment_distance = self.map.get_distance(current_node_id, next_node_id)
 
         speed = self.config.get("vehicle_speed", 10.0)
         if segment_distance > 0:
@@ -162,6 +214,11 @@ class Simulator:
             vehicle.progress = 0.0
             vehicle.current_node = next_node_id
             vehicle.move(segment_distance)
+
+            # Track distance and moving time
+            if vehicle.id < len(self.total_distance_traveled):
+                self.total_distance_traveled[vehicle.id] += segment_distance
+                self.vehicle_moving_time[vehicle.id] += self.tick_interval
 
             if vehicle.current_path_index >= len(vehicle.current_path_nodes) - 1:
                 self._on_arrive_at_node(vehicle)
@@ -174,6 +231,11 @@ class Simulator:
             move_dist = speed * self.tick_interval
             vehicle.move(min(move_dist, segment_distance))
 
+            # Track partial distance and moving time
+            if vehicle.id < len(self.total_distance_traveled):
+                self.total_distance_traveled[vehicle.id] += min(move_dist, segment_distance)
+                self.vehicle_moving_time[vehicle.id] += self.tick_interval
+
     def _on_arrive_at_node(self, vehicle: Vehicle) -> None:
         """Handle vehicle arriving at destination node."""
         vehicle.status = VehicleStatus.IDLE
@@ -184,8 +246,12 @@ class Simulator:
         # Check if at charging station
         for station in self.charging_stations:
             if station.node_id == vehicle.current_node:
+                if vehicle.action_plan and vehicle.action_plan[0].get("type") == "charge":
+                    vehicle.action_plan.pop(0)
                 if station.is_available():
                     station.start_charging(vehicle)
+                    self._charging_start_times[vehicle.id] = self.current_time
+                    self.charging_count += 1
                 else:
                     station.join_queue(vehicle)
                 return
@@ -202,9 +268,18 @@ class Simulator:
 
         if action_type == "pickup":
             task = action["task"]
+            # Wait if task is not yet ready (global_or mode)
+            if self.current_time < task.ready_time:
+                vehicle.action_plan.insert(0, action)
+                return
+            # Skip if task already timed out
+            if task.status == Task.STATUS_TIMEOUT:
+                vehicle.status = VehicleStatus.IDLE
+                return
             vehicle.status = VehicleStatus.LOADING
             task.status = Task.STATUS_PICKING
-            vehicle.add_task(task)
+            if task not in vehicle.carrying_tasks:
+                vehicle.add_task(task)
             task.status = Task.STATUS_DELIVERING
             vehicle.status = VehicleStatus.IDLE
 
@@ -212,6 +287,10 @@ class Simulator:
             task = action["task"]
             vehicle.status = VehicleStatus.UNLOADING
             vehicle.remove_task(task)
+            # Only count as completed if not already timed out
+            if task.status == Task.STATUS_TIMEOUT:
+                vehicle.status = VehicleStatus.IDLE
+                return
             task.status = Task.STATUS_COMPLETED
             task.completed_time = self.current_time
             self.completed_tasks.append(task)
@@ -236,6 +315,8 @@ class Simulator:
             if station:
                 if station.is_available():
                     station.start_charging(vehicle)
+                    self._charging_start_times[vehicle.id] = self.current_time
+                    self.charging_count += 1
                 else:
                     station.join_queue(vehicle)
 
@@ -245,16 +326,29 @@ class Simulator:
             if vehicle.status not in [VehicleStatus.IDLE, VehicleStatus.MOVING]:
                 continue
 
+            if any(a.get("type") == "charge" for a in vehicle.action_plan):
+                continue
+            if any(s.node_id == vehicle.current_node for s in self.charging_stations):
+                continue
+
             nearest_station = self.map.find_nearest_station(vehicle.current_node)
             if nearest_station is None:
                 continue
 
             dist_to_station = self.map.get_distance(vehicle.current_node, nearest_station)
+            if dist_to_station == float("inf"):
+                continue
+
             consumption_to_station = (
-                vehicle.get_consumption_rate() * dist_to_station * 1.5
+                vehicle.get_consumption_rate() * dist_to_station * 2.0
             )
 
-            if vehicle.current_battery <= consumption_to_station:
+            battery_threshold = max(
+                consumption_to_station,
+                vehicle.max_battery * 0.25,
+            )
+
+            if vehicle.current_battery <= battery_threshold:
                 station = next(
                     (s for s in self.charging_stations if s.node_id == nearest_station),
                     None,
@@ -353,3 +447,8 @@ class Simulator:
         self.map = None
         self.scheduler = None
         self.event_generator = None
+        self.total_distance_traveled = []
+        self.total_charging_time = 0.0
+        self.charging_count = 0
+        self.vehicle_moving_time = []
+        self._charging_start_times = {}

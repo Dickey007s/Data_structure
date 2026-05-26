@@ -4,3 +4,4 @@ flask-cors>=4.0.0
 networkx>=3.2.1
 numpy>=2.0.0
 python-socketio>=5.9.0
+ortools>=9.10

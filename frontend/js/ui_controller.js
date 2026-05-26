@@ -30,6 +30,11 @@ class UIController {
         document.getElementById('btn-start').addEventListener('click', () => this.start());
         document.getElementById('btn-pause').addEventListener('click', () => this.pause());
         document.getElementById('btn-reset').addEventListener('click', () => this.reset());
+        document.getElementById('btn-compare').addEventListener('click', () => this.runComparison());
+        document.getElementById('modal-close').addEventListener('click', () => hideComparisonModal());
+        document.getElementById('compare-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'compare-modal') hideComparisonModal();
+        });
     }
 
     setupSocketListeners() {
@@ -52,30 +57,55 @@ class UIController {
         this.socketClient.on('disconnected', () => {
             this.log('与服务器断开连接');
         });
+
+        this.socketClient.on('comparison_progress', (data) => {
+            const nameMap = {
+                nearest: '最近优先',
+                max_weight: '最大重量优先',
+                insertion: '插入启发式',
+                global_or: 'OR-Tools 全局最优'
+            };
+            if (data.status === 'running') {
+                setComparisonStatus(`正在运行: ${nameMap[data.strategy] || data.strategy}...`);
+            } else if (data.status === 'done') {
+                setComparisonStatus(`${nameMap[data.strategy] || data.strategy} 完成`);
+            }
+        });
+
+        this.socketClient.on('comparison_finished', (results) => {
+            this.log('对比实验完成！');
+            showComparisonResults();
+            renderAllCharts(results);
+        });
+
+        this.socketClient.on('comparison_error', (data) => {
+            this.log(`对比实验出错: ${data.error}`);
+            setComparisonStatus(`出错: ${data.error}`);
+        });
     }
 
     async initialize() {
         const numVehicles = parseInt(document.getElementById('config-vehicles').value);
         const fleet = Array.from({length: numVehicles}, (_, i) => ({
-            id: i + 1,
-            start_node: 0,
-            max_battery: 100,
+            id: i,
+            start_node: i % 30,
+            max_battery: 800,
             max_capacity: 50,
-            consumption_empty: 0.5,
-            consumption_full: 1.2
+            consumption_empty: 0.05,
+            consumption_full: 0.1
         }));
 
         const config = {
-            map: {width: 100, height: 100, num_nodes: 50},
+            map: {width: 1000, height: 800, num_nodes: 30},
             fleet: fleet,
             stations: [
-                {id: 1, node_id: 10, total_slots: 3, charge_rate: 5},
-                {id: 2, node_id: 25, total_slots: 3, charge_rate: 5},
-                {id: 3, node_id: 40, total_slots: 2, charge_rate: 8}
+                {id: 0, node_id: 10, total_slots: 2, charge_rate: 30},
+                {id: 1, node_id: 25, total_slots: 2, charge_rate: 30},
+                {id: 2, node_id: 40, total_slots: 2, charge_rate: 30}
             ],
             scheduler: document.getElementById('config-scheduler').value,
             task_count: parseInt(document.getElementById('config-tasks').value),
-            time_horizon: 2000,
+            time_horizon: 1000,
             tick_interval: 1,
             sim_speed: parseFloat(document.getElementById('config-speed').value)
         };
@@ -145,6 +175,52 @@ class UIController {
             this.mapRenderer.render();
         } catch (error) {
             this.log(`重置失败: ${error.message}`);
+        }
+    }
+
+    async runComparison() {
+        const numVehicles = parseInt(document.getElementById('config-vehicles').value);
+        const fleet = Array.from({length: numVehicles}, (_, i) => ({
+            id: i,
+            start_node: i % 30,
+            max_battery: 800,
+            max_capacity: 50,
+            consumption_empty: 0.05,
+            consumption_full: 0.1
+        }));
+
+        const config = {
+            map: {width: 1000, height: 800, num_nodes: 30},
+            fleet: fleet,
+            stations: [
+                {id: 0, node_id: 10, total_slots: 2, charge_rate: 30},
+                {id: 1, node_id: 25, total_slots: 2, charge_rate: 30},
+                {id: 2, node_id: 40, total_slots: 2, charge_rate: 30}
+            ],
+            scheduler: 'insertion',
+            task_count: parseInt(document.getElementById('config-tasks').value),
+            time_horizon: 1000,
+            tick_interval: 1,
+            sim_speed: parseFloat(document.getElementById('config-speed').value)
+        };
+
+        try {
+            showComparisonModal();
+            const response = await fetch('/api/compare', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(config)
+            });
+            const data = await response.json();
+            if (data.status === 'started') {
+                this.log('对比实验已启动，请等待...');
+            } else {
+                this.log(`对比实验启动失败: ${data.error || '未知错误'}`);
+                hideComparisonModal();
+            }
+        } catch (error) {
+            this.log(`对比实验请求失败: ${error.message}`);
+            hideComparisonModal();
         }
     }
 

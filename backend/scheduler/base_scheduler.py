@@ -63,3 +63,10 @@ class BaseScheduler(ABC):
     def check_time_window(self, vehicle, task, arrival_time: int) -> bool:
         """Check if arrival time satisfies task time window."""
         return arrival_time <= task.due_time
+
+    def preassign_all_tasks(self, tasks, fleet, map_obj) -> None:
+        """Pre-assign all tasks to fleet (used by global schedulers).
+
+        Override in subclasses that support static pre-computation.
+        """
+        pass

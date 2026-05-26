@@ -32,18 +32,22 @@ class ChargingStation:
 
     def join_queue(self, vehicle: Vehicle) -> None:
         """Add vehicle to waiting queue."""
-        if vehicle not in self.waiting_queue:
+        if vehicle not in self.waiting_queue and not self._is_charging(vehicle):
             self.waiting_queue.append(vehicle)
             vehicle.status = VehicleStatus.WAITING_CHARGE
 
     def start_charging(self, vehicle: Vehicle) -> bool:
         """Start charging a vehicle."""
-        if self.is_available():
+        if self.is_available() and not self._is_charging(vehicle):
             self.occupied_slots += 1
             self.charging_vehicles.append((vehicle, 0))
             vehicle.status = VehicleStatus.CHARGING
             return True
         return False
+
+    def _is_charging(self, vehicle: Vehicle) -> bool:
+        """Check if vehicle is already charging at this station."""
+        return any(v.id == vehicle.id for v, _ in self.charging_vehicles)
 
     def tick(self, dt: float) -> List[Vehicle]:
         """Advance charging state, return completed vehicles."""

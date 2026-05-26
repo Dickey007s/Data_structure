@@ -49,27 +49,40 @@ class MaxWeightScheduler(BaseScheduler):
         task: Task,
         map_obj: TransportMap,
     ) -> None:
-        """Append task to vehicle's route (same as nearest-first)."""
-        path_to_pickup = map_obj.get_path(vehicle.current_node, task.pickup_node)
-        path_to_delivery = map_obj.get_path(task.pickup_node, task.delivery_node)
+        """Append task to vehicle's route."""
+        # Add pickup and deliver actions to plan
+        vehicle.action_plan.append({"type": "pickup", "task": task})
+        vehicle.action_plan.append({"type": "deliver", "task": task})
 
-        if path_to_pickup and path_to_delivery:
-            vehicle.current_path_nodes = path_to_pickup[:-1] + path_to_delivery
-        elif path_to_pickup:
-            vehicle.current_path_nodes = path_to_pickup
-        else:
-            vehicle.current_path_nodes = [vehicle.current_node]
+        # Rebuild full path from action plan
+        vehicle.current_path_nodes = [vehicle.current_node]
+        current = vehicle.current_node
+
+        for action in vehicle.action_plan:
+            if action["type"] == "pickup":
+                target = action["task"].pickup_node
+            elif action["type"] == "deliver":
+                target = action["task"].delivery_node
+            elif action["type"] == "move":
+                target = action["target"]
+            else:
+                continue
+
+            if target != current:
+                path = map_obj.get_path(current, target)
+                if path and len(path) > 1:
+                    vehicle.current_path_nodes.extend(path[1:])
+                else:
+                    vehicle.current_path_nodes.append(target)
+                current = target
 
         vehicle.current_path_index = 0
-        vehicle.status = VehicleStatus.MOVING
+        if len(vehicle.current_path_nodes) > 1:
+            vehicle.status = VehicleStatus.MOVING
+
         vehicle.add_task(task)
         task.status = Task.STATUS_ASSIGNED
         task.assigned_vehicle = vehicle.id
-
-        vehicle.action_plan = [
-            {"type": "pickup", "task": task},
-            {"type": "deliver", "task": task},
-        ]
 
     def replan(self, fleet: List[Vehicle], active_tasks: List[Task], map_obj: TransportMap) -> None:
         """Greedy strategy does not support replanning."""

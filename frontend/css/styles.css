@@ -274,3 +274,135 @@ input, select {
 .badge-assigned { background: var(--success); color: #000; }
 .badge-completed { background: #00ff88; color: #000; }
 .badge-timeout { background: var(--accent); color: #fff; }
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    width: 95%;
+    max-width: 1200px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    z-index: 10;
+}
+
+.modal-header h2 {
+    color: var(--success);
+    font-size: 1.2rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.modal-close:hover { color: var(--accent); }
+
+.modal-body { padding: 24px; }
+
+/* Loading */
+.compare-loading {
+    text-align: center;
+    padding: 60px;
+}
+
+.spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--success);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Comparison sections */
+.compare-section { margin-bottom: 32px; }
+.compare-section h3 {
+    font-size: 1rem;
+    color: var(--success);
+    margin-bottom: 16px;
+}
+
+.charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.chart-box {
+    background: var(--bg-primary);
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid var(--border);
+}
+
+.chart-box h3 {
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.chart-box canvas {
+    max-height: 280px;
+}
+
+/* Metrics table */
+.table-container { overflow-x: auto; }
+
+.metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.metrics-table th, .metrics-table td {
+    padding: 10px 12px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.metrics-table th {
+    background: var(--bg-panel);
+    color: var(--success);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+
+.metrics-table td:first-child, .metrics-table th:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+
+.metrics-table tr:hover { background: rgba(0,217,255,0.05); }
+
+.metric-best { color: #00ff88; font-weight: 700; }
+.metric-good { color: #f9a826; font-weight: 600; }

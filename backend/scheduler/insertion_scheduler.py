@@ -22,6 +22,9 @@ class InsertionScheduler(BaseScheduler):
         best_insertion = None  # (pickup_idx, delivery_idx)
 
         for vehicle in fleet:
+            if vehicle.status not in [VehicleStatus.IDLE, VehicleStatus.MOVING]:
+                continue
+
             # Vehicle with no route: direct assignment
             if not vehicle.action_plan:
                 cost = self._calculate_direct_cost(vehicle, task, map_obj)
@@ -44,7 +47,7 @@ class InsertionScheduler(BaseScheduler):
                         best_insertion = (p_idx, d_idx)
 
         if best_vehicle and best_insertion:
-            self._apply_insertion(best_vehicle, task, best_insertion)
+            self._apply_insertion(best_vehicle, task, best_insertion, map_obj)
             return best_vehicle
         return None
 
@@ -116,13 +119,14 @@ class InsertionScheduler(BaseScheduler):
         vehicle: Vehicle,
         task: Task,
         insertion: Tuple[int, int],
+        map_obj: TransportMap,
     ) -> None:
         """Apply the insertion to vehicle's action plan."""
         p_idx, d_idx = insertion
         vehicle.action_plan.insert(p_idx, {"type": "pickup", "task": task})
         vehicle.action_plan.insert(d_idx + 1, {"type": "deliver", "task": task})
 
-        # Rebuild path from action plan
+        # Rebuild full path from action plan
         vehicle.current_path_nodes = [vehicle.current_node]
         current = vehicle.current_node
 
@@ -137,8 +141,11 @@ class InsertionScheduler(BaseScheduler):
                 continue
 
             if target != current:
-                path = vehicle.current_path_nodes
-                path.append(target)
+                path = map_obj.get_path(current, target)
+                if path and len(path) > 1:
+                    vehicle.current_path_nodes.extend(path[1:])
+                else:
+                    vehicle.current_path_nodes.append(target)
                 current = target
 
         vehicle.current_path_index = 0

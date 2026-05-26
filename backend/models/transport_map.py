@@ -101,6 +101,8 @@ class TransportMap:
         """Get shortest path distance between two nodes."""
         if u == v:
             return 0.0
+        if u not in self.graph or v not in self.graph:
+            return float("inf")
         key = (min(u, v), max(u, v))
         if key not in self.dist_matrix:
             try:
@@ -120,11 +122,11 @@ class TransportMap:
 
     def find_nearest_station(self, node_id: int) -> Optional[int]:
         """Find nearest charging station to given node."""
-        if not self.station_nodes:
+        if not self.station_nodes or node_id not in self.graph:
             return None
 
         min_dist = float("inf")
-        nearest = self.station_nodes[0]
+        nearest = None
         for station_node in self.station_nodes:
             dist = self.get_distance(node_id, station_node)
             if dist < min_dist:

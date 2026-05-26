@@ -13,6 +13,7 @@ from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 
 from backend.simulator.simulator import Simulator
+from backend.benchmark.comparison_runner import ComparisonRunner
 
 app = Flask(__name__, static_folder="../frontend")
 CORS(app)
@@ -21,6 +22,9 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # Global simulator instance and thread
 simulator: Optional[Simulator] = None
 sim_thread: Optional[threading.Thread] = None
+
+# Comparison runner state
+comparison_running = False
 
 
 @app.route("/")
@@ -128,13 +132,49 @@ def get_stats():
     })
 
 
+@app.route("/api/compare", methods=["POST"])
+def start_comparison():
+    """Start comparison experiment across all strategies."""
+    global comparison_running
+
+    if comparison_running:
+        return jsonify({"error": "Comparison already running"}), 400
+
+    config = request.json
+
+    def emit_progress(data):
+        socketio.emit("comparison_progress", data)
+
+    def emit_result(results):
+        global comparison_running
+        socketio.emit("comparison_finished", results)
+        comparison_running = False
+
+    def run_comparison():
+        global comparison_running
+        comparison_running = True
+        runner = ComparisonRunner()
+        try:
+            runner.run(config, emit_progress=emit_progress, emit_result=emit_result)
+        except Exception as e:
+            comparison_running = False
+            import traceback
+            traceback.print_exc()
+            socketio.emit("comparison_error", {"error": str(e)})
+
+    thread = threading.Thread(target=run_comparison, daemon=True)
+    thread.start()
+
+    return jsonify({"status": "started"})
+
+
 @socketio.on("connect")
 def handle_connect():
     """Client connected."""
     print(f"Client connected: {request.sid}")
     emit("connected", {
         "message": "Connected to EV Fleet Simulation Server",
-        "version": "1.0",
+        "version": "1.1",
     })
 
 
