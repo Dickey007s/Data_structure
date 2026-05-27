@@ -215,6 +215,10 @@ class Simulator:
             vehicle.current_path_nodes = []
             vehicle.current_path_index = 0
             vehicle.progress = 0.0
+            # Clear stale plan and ghost tasks to prevent permanent stuck
+            vehicle.action_plan = []
+            for task in list(vehicle.carrying_tasks):
+                vehicle.remove_task(task)
             return
 
         current_pos = self.map.get_node_position(current_node_id)
@@ -261,8 +265,10 @@ class Simulator:
         # Check if at charging station
         for station in self.charging_stations:
             if station.node_id == vehicle.current_node:
-                if vehicle.action_plan and vehicle.action_plan[0].get("type") == "charge":
-                    vehicle.action_plan.pop(0)
+                # Only handle charging if vehicle actually intends to charge
+                if not (vehicle.action_plan and vehicle.action_plan[0].get("type") == "charge"):
+                    break
+                vehicle.action_plan.pop(0)
                 if station.is_available():
                     station.start_charging(vehicle)
                     self._charging_start_times[vehicle.id] = self.current_time
@@ -290,6 +296,11 @@ class Simulator:
             # Skip if task already timed out
             if task.status == Task.STATUS_TIMEOUT:
                 vehicle.status = VehicleStatus.IDLE
+                # Clean up remaining actions for this dead task
+                vehicle.action_plan = [
+                    a for a in vehicle.action_plan
+                    if not (a.get("type") in ("pickup", "deliver") and a.get("task") is task)
+                ]
                 return
             vehicle.status = VehicleStatus.LOADING
             task.status = Task.STATUS_PICKING
@@ -388,7 +399,12 @@ class Simulator:
         if self._return_phase or self._all_returned:
             return
 
-        total_tasks = self.config.get("task_count", 100)
+        total_tasks = (
+            len(self.event_generator.schedule)
+            + self.event_generator.generated_count
+            if self.event_generator
+            else self.config.get("task_count", 100)
+        )
         completed_or_failed = len(self.completed_tasks) + len(self.failed_tasks)
         all_tasks_processed = completed_or_failed >= total_tasks
         no_active = len(self.active_tasks) == 0
@@ -451,7 +467,7 @@ class Simulator:
                     )
                     if station:
                         vehicle.action_plan = [
-                            {"type": "depot_return", "target": nearest_station},
+                            {"type": "move", "target": nearest_station},
                             {"type": "charge", "station_id": station.id},
                             {"type": "depot_return", "target": depot},
                         ]
@@ -525,7 +541,12 @@ class Simulator:
 
     def _check_finished(self) -> bool:
         """Check if simulation is complete (all tasks done + all vehicles returned to depot)."""
-        total_tasks = self.config.get("task_count", 100)
+        total_tasks = (
+            len(self.event_generator.schedule)
+            + self.event_generator.generated_count
+            if self.event_generator
+            else self.config.get("task_count", 100)
+        )
         completed_or_failed = len(self.completed_tasks) + len(self.failed_tasks)
         all_tasks_processed = completed_or_failed >= total_tasks
         no_active = len(self.active_tasks) == 0
