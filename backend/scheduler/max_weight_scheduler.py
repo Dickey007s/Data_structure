@@ -24,8 +24,9 @@ class MaxWeightScheduler(BaseScheduler):
                 continue
 
             dist_to_pickup = map_obj.get_distance(vehicle.current_node, task.pickup_node)
-            dist_delivery = map_obj.get_distance(task.pickup_node, task.delivery_node)
-            total_distance = dist_to_pickup + dist_delivery
+            dist_depot = map_obj.get_distance(task.pickup_node, map_obj.depot_node)
+            dist_delivery = map_obj.get_distance(map_obj.depot_node, task.delivery_node)
+            total_distance = dist_to_pickup + dist_depot + dist_delivery
 
             if not self.check_capacity(vehicle, task):
                 continue
@@ -64,6 +65,7 @@ class MaxWeightScheduler(BaseScheduler):
     ) -> None:
         """Append task to vehicle's route."""
         vehicle.action_plan.append({"type": "pickup", "task": task})
+        vehicle.action_plan.append({"type": "move", "target": map_obj.depot_node})
         vehicle.action_plan.append({"type": "deliver", "task": task})
 
         # Rebuild full path from action plan

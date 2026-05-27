@@ -128,6 +128,12 @@ class Simulator:
                         if not assigned:
                             task.status = Task.STATUS_PENDING
 
+            # 1.5. Retry assigning previously pending tasks
+            # Vehicles may have become available (finished tasks, charged, etc.)
+            for task in self.active_tasks:
+                if task.status == Task.STATUS_PENDING and self.scheduler:
+                    self.scheduler.assign_task(task, self.fleet, self.map)
+
             # 2. Update each vehicle
             for vehicle in self.fleet:
                 self._update_vehicle(vehicle)

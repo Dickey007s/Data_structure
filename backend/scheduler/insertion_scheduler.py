@@ -63,7 +63,8 @@ class InsertionScheduler(BaseScheduler):
 
         dist = (
             map_obj.get_distance(vehicle.current_node, task.pickup_node)
-            + map_obj.get_distance(task.pickup_node, task.delivery_node)
+            + map_obj.get_distance(task.pickup_node, map_obj.depot_node)
+            + map_obj.get_distance(map_obj.depot_node, task.delivery_node)
         )
 
         if not self.check_battery(vehicle, task, map_obj, dist):
@@ -83,10 +84,11 @@ class InsertionScheduler(BaseScheduler):
         if not self.check_capacity(vehicle, task):
             return None
 
-        # Build tentative action plan
+        # Build tentative action plan (pickup -> depot -> deliver)
         new_plan = vehicle.action_plan.copy()
         new_plan.insert(p_idx, {"type": "pickup", "task": task})
-        new_plan.insert(d_idx + 1, {"type": "deliver", "task": task})
+        new_plan.insert(p_idx + 1, {"type": "move", "target": map_obj.depot_node})
+        new_plan.insert(d_idx + 2, {"type": "deliver", "task": task})
 
         # Simulate route to calculate total distance
         total_dist = 0.0
@@ -124,7 +126,8 @@ class InsertionScheduler(BaseScheduler):
         """Apply the insertion to vehicle's action plan."""
         p_idx, d_idx = insertion
         vehicle.action_plan.insert(p_idx, {"type": "pickup", "task": task})
-        vehicle.action_plan.insert(d_idx + 1, {"type": "deliver", "task": task})
+        vehicle.action_plan.insert(p_idx + 1, {"type": "move", "target": map_obj.depot_node})
+        vehicle.action_plan.insert(d_idx + 2, {"type": "deliver", "task": task})
 
         # Rebuild full path from action plan
         vehicle.current_path_nodes = [vehicle.current_node]
