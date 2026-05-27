@@ -207,11 +207,8 @@ class Simulator:
         current_node_id = vehicle.current_path_nodes[vehicle.current_path_index]
         next_node_id = vehicle.current_path_nodes[vehicle.current_path_index + 1]
 
-        # Check battery: stop if depleted or cannot reach next node
-        segment_distance = self.map.get_distance(current_node_id, next_node_id)
-        consumption = vehicle.get_consumption_rate() * segment_distance
+        # Check battery: stop if fully depleted
         if vehicle.current_battery <= 0:
-            # Battery fully depleted — cannot move at all
             vehicle.status = VehicleStatus.IDLE
             vehicle.current_path_nodes = []
             vehicle.current_path_index = 0
@@ -220,9 +217,12 @@ class Simulator:
             for task in list(vehicle.carrying_tasks):
                 vehicle.remove_task(task)
             return
-        if vehicle.current_battery < consumption * 0.5:
-            # Insufficient battery for next segment — stop and let
-            # _handle_low_battery route to a charging station
+
+        # Allow vehicles heading to charge to keep moving if still have some battery
+        has_charge_plan = any(a.get("type") == "charge" for a in vehicle.action_plan)
+        segment_distance = self.map.get_distance(current_node_id, next_node_id)
+        consumption = vehicle.get_consumption_rate() * segment_distance
+        if not has_charge_plan and vehicle.current_battery < consumption * 0.5:
             vehicle.status = VehicleStatus.IDLE
             vehicle.current_path_nodes = []
             vehicle.current_path_index = 0
