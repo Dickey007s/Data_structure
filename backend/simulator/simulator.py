@@ -208,9 +208,11 @@ class Simulator:
         next_node_id = vehicle.current_path_nodes[vehicle.current_path_index + 1]
 
         # Check battery: stop if depleted or cannot reach next node
+        # Allow vehicles heading to charge to keep moving (emergency rescue)
+        has_charge_plan = any(a.get("type") == "charge" for a in vehicle.action_plan)
         segment_distance = self.map.get_distance(current_node_id, next_node_id)
         consumption = vehicle.get_consumption_rate() * segment_distance
-        if vehicle.current_battery <= 0 or vehicle.current_battery < consumption * 0.5:
+        if not has_charge_plan and (vehicle.current_battery <= 0 or vehicle.current_battery < consumption * 0.5):
             vehicle.status = VehicleStatus.IDLE
             vehicle.current_path_nodes = []
             vehicle.current_path_index = 0
