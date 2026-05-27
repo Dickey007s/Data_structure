@@ -81,6 +81,23 @@ class Vehicle:
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for JSON transmission."""
+        # Infer next target node for preview line rendering
+        next_target = None
+        if self.current_path_nodes:
+            next_target = self.current_path_nodes[-1]
+        elif self.action_plan:
+            action = self.action_plan[0]
+            action_type = action.get("type")
+            if action_type == "pickup":
+                next_target = action["task"].pickup_node
+            elif action_type == "deliver":
+                next_target = action["task"].delivery_node
+            elif action_type in ("move", "depot_return"):
+                next_target = action["target"]
+            elif action_type == "charge":
+                # Vehicle is already at the station node; no preview needed
+                next_target = self.current_node
+
         return {
             "id": self.id,
             "node": self.current_node,
@@ -95,5 +112,6 @@ class Vehicle:
             else 0,
             "status": self.status.value,
             "path": self.current_path_nodes,
+            "next_target": next_target,
             "carrying": [t.id for t in self.carrying_tasks],
         }

@@ -71,27 +71,41 @@ class VehicleRenderer {
     }
 
     drawPath(vehicle) {
-        if (!vehicle.path || vehicle.path.length < 2) return;
-
         this.ctx.save();
-        this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.18)';
         this.ctx.lineWidth = Math.max(1, 1.5 * this.mapRenderer.scale);
         this.ctx.setLineDash([5, 5]);
 
-        this.ctx.beginPath();
-        const start = this.mapRenderer.worldToScreen(
-            ...this.mapRenderer.getNodePosition(vehicle.path[0])
-        );
-        this.ctx.moveTo(start.x, start.y);
-
-        for (let i = 1; i < vehicle.path.length; i++) {
-            const pos = this.mapRenderer.worldToScreen(
-                ...this.mapRenderer.getNodePosition(vehicle.path[i])
+        if (vehicle.path && vehicle.path.length >= 2) {
+            // Full current path (vehicle is moving)
+            this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.18)';
+            this.ctx.beginPath();
+            const start = this.mapRenderer.worldToScreen(
+                ...this.mapRenderer.getNodePosition(vehicle.path[0])
             );
-            this.ctx.lineTo(pos.x, pos.y);
+            this.ctx.moveTo(start.x, start.y);
+
+            for (let i = 1; i < vehicle.path.length; i++) {
+                const pos = this.mapRenderer.worldToScreen(
+                    ...this.mapRenderer.getNodePosition(vehicle.path[i])
+                );
+                this.ctx.lineTo(pos.x, pos.y);
+            }
+            this.ctx.stroke();
+        } else if (vehicle.next_target != null && vehicle.next_target !== vehicle.node) {
+            // Preview line to next target when idle but has pending action
+            this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.45)';
+            this.ctx.beginPath();
+            const start = this.mapRenderer.worldToScreen(
+                vehicle.position[0], vehicle.position[1]
+            );
+            const end = this.mapRenderer.worldToScreen(
+                ...this.mapRenderer.getNodePosition(vehicle.next_target)
+            );
+            this.ctx.moveTo(start.x, start.y);
+            this.ctx.lineTo(end.x, end.y);
+            this.ctx.stroke();
         }
 
-        this.ctx.stroke();
         this.ctx.restore();
     }
 }
