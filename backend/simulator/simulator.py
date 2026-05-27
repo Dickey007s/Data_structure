@@ -31,7 +31,7 @@ class Simulator:
         self.running = False
         self.tick_interval = config.get("tick_interval", 1)
         self.sim_speed = config.get("sim_speed", 1.0)
-        self.real_time_step = 0.1 / self.sim_speed
+        self.real_time_step = max(0.0, 0.1 / self.sim_speed - 0.002)
         self.scheduler_type = config.get("scheduler", "insertion")
 
         self._emit_state: Optional[Callable] = None
@@ -116,7 +116,8 @@ class Simulator:
     def tick(self) -> dict:
         """Advance one simulation tick and return state snapshot."""
         try:
-            self.current_time += self.tick_interval
+            # Speed multiplier: larger sim_speed = bigger time jumps per tick
+            self.current_time += self.tick_interval * max(1, int(self.sim_speed))
 
             # 1. Generate new tasks
             if self.event_generator:

@@ -114,10 +114,19 @@ class TransportMap:
                     if diag_id < node_id and random.random() < 0.4:
                         self._add_edge_if_not_exists(nid, diag_id)
 
-        # Assign station nodes (random from non-depot, fully randomized by seed)
+        # Assign station nodes (random from non-depot, keep away from edges)
         non_depot = [n for n in self.nodes if n != self.depot_node]
         if len(non_depot) >= num_stations:
-            self.station_nodes = sorted(random.sample(non_depot, num_stations))
+            # Exclude nodes too close to map edges (10% margin)
+            margin_x = self.width * 0.1
+            margin_y = self.height * 0.1
+            candidates = [
+                n for n in non_depot
+                if margin_x <= self.nodes[n][0] <= self.width - margin_x
+                and margin_y <= self.nodes[n][1] <= self.height - margin_y
+            ]
+            pool = candidates if len(candidates) >= num_stations else non_depot
+            self.station_nodes = sorted(random.sample(pool, num_stations))
             for sid in self.station_nodes:
                 x, y, _ = self.nodes[sid]
                 self.nodes[sid] = (x, y, "station")
