@@ -116,8 +116,7 @@ class Simulator:
     def tick(self) -> dict:
         """Advance one simulation tick and return state snapshot."""
         try:
-            # Speed multiplier: larger sim_speed = bigger time jumps per tick
-            self.current_time += self.tick_interval * max(1, int(self.sim_speed))
+            self.current_time += self.tick_interval
 
             # 1. Generate new tasks
             if self.event_generator:
