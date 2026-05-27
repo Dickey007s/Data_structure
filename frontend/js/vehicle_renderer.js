@@ -72,12 +72,12 @@ class VehicleRenderer {
 
     drawPath(vehicle) {
         this.ctx.save();
-        this.ctx.lineWidth = Math.max(1, 1.5 * this.mapRenderer.scale);
+        this.ctx.lineWidth = Math.max(2, 2.5 * this.mapRenderer.scale);
         this.ctx.setLineDash([5, 5]);
 
         if (vehicle.path && vehicle.path.length >= 2) {
             // Full current path (vehicle is moving)
-            this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.18)';
+            this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.45)';
             this.ctx.beginPath();
             const start = this.mapRenderer.worldToScreen(
                 ...this.mapRenderer.getNodePosition(vehicle.path[0])
@@ -93,7 +93,7 @@ class VehicleRenderer {
             this.ctx.stroke();
         } else if (vehicle.next_target != null && vehicle.next_target !== vehicle.node) {
             // Preview line to next target when idle but has pending action
-            this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.45)';
+            this.ctx.strokeStyle = 'rgba(30, 120, 200, 0.75)';
             this.ctx.beginPath();
             const start = this.mapRenderer.worldToScreen(
                 vehicle.position[0], vehicle.position[1]
