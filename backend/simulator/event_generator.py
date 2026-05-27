@@ -74,6 +74,3 @@ class EventGenerator:
             return self.schedule[0]["create_time"]
         return None
 
-    def get_all_tasks(self) -> List[dict]:
-        """Return all pre-generated task data without consuming schedule."""
-        return self.schedule.copy()

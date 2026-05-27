@@ -11,7 +11,6 @@ from backend.scheduler.base_scheduler import BaseScheduler
 from backend.scheduler.nearest_first_scheduler import NearestFirstScheduler
 from backend.scheduler.max_weight_scheduler import MaxWeightScheduler
 from backend.scheduler.insertion_scheduler import InsertionScheduler
-from backend.scheduler.global_or_scheduler import GlobalORScheduler
 from backend.simulator.event_generator import EventGenerator
 
 
@@ -94,17 +93,6 @@ class Simulator:
         )
         self.event_generator.generate_schedule()
 
-        # Global OR mode: pre-create all tasks and pre-assign
-        if scheduler_type == "global_or":
-            all_tasks_data = self.event_generator.get_all_tasks()
-            all_tasks = [Task(**data) for data in all_tasks_data]
-            self.scheduler.preassign_all_tasks(all_tasks, self.fleet, self.map)
-            self.active_tasks = all_tasks
-            # Pre-mark tasks as assigned (they will execute when ready_time is reached)
-            for task in all_tasks:
-                if task.status == Task.STATUS_PENDING and task.assigned_vehicle is not None:
-                    task.status = Task.STATUS_ASSIGNED
-
     def _create_scheduler(self, scheduler_type: str) -> BaseScheduler:
         """Factory method for schedulers."""
         if scheduler_type == "nearest":
@@ -113,8 +101,6 @@ class Simulator:
             return MaxWeightScheduler()
         elif scheduler_type == "insertion":
             return InsertionScheduler()
-        elif scheduler_type == "global_or":
-            return GlobalORScheduler()
         else:
             raise ValueError(f"Unknown scheduler type: {scheduler_type}")
 
@@ -124,16 +110,14 @@ class Simulator:
             self.current_time += self.tick_interval
 
             # 1. Generate new tasks
-            if self.scheduler_type != "global_or":
-                if self.event_generator:
-                    new_tasks = self.event_generator.generate(self.current_time)
-                    for task in new_tasks:
-                        self.active_tasks.append(task)
-                        if self.scheduler:
-                            assigned = self.scheduler.assign_task(task, self.fleet, self.map)
-                            if not assigned:
-                                task.status = Task.STATUS_PENDING
-            # global_or mode: tasks are already pre-created and pre-assigned
+            if self.event_generator:
+                new_tasks = self.event_generator.generate(self.current_time)
+                for task in new_tasks:
+                    self.active_tasks.append(task)
+                    if self.scheduler:
+                        assigned = self.scheduler.assign_task(task, self.fleet, self.map)
+                        if not assigned:
+                            task.status = Task.STATUS_PENDING
 
             # 2. Update each vehicle
             for vehicle in self.fleet:
@@ -268,7 +252,7 @@ class Simulator:
 
         if action_type == "pickup":
             task = action["task"]
-            # Wait if task is not yet ready (global_or mode)
+            # Wait if task is not yet ready
             if self.current_time < task.ready_time:
                 vehicle.action_plan.insert(0, action)
                 return
