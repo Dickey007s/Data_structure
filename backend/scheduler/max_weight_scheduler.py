@@ -1,4 +1,4 @@
-"""Max-weight-first scheduling strategy."""
+"""Max-weight-first scheduling strategy with capacity-aware selection."""
 
 from typing import List, Optional
 from backend.models.task import Task
@@ -8,7 +8,7 @@ from backend.scheduler.base_scheduler import BaseScheduler
 
 
 class MaxWeightScheduler(BaseScheduler):
-    """Prioritize heavy tasks, selecting most efficient vehicle."""
+    """Prioritize heavy tasks, selecting vehicle with best capacity-distance ratio."""
 
     def assign_task(
         self,
@@ -16,7 +16,7 @@ class MaxWeightScheduler(BaseScheduler):
         fleet: List[Vehicle],
         map_obj: TransportMap,
     ) -> Optional[Vehicle]:
-        """Assign task to vehicle with best weight/distance ratio."""
+        """Assign heavy tasks to vehicles with best capacity-distance balance."""
         candidates = []
 
         for vehicle in fleet:
@@ -32,13 +32,26 @@ class MaxWeightScheduler(BaseScheduler):
             if not self.check_battery(vehicle, task, map_obj, total_distance):
                 continue
 
-            # Efficiency = weight / distance (higher is better)
-            efficiency = task.weight / (total_distance + 1)
-            candidates.append((efficiency, vehicle, total_distance))
+            # Composite score: heavy tasks favor vehicles with more remaining capacity
+            # and sufficient battery, not just the nearest one
+            remaining_capacity = vehicle.max_capacity - vehicle.current_load
+            capacity_ratio = remaining_capacity / max(vehicle.max_capacity, 1)
+            battery_ratio = vehicle.current_battery / max(vehicle.max_battery, 1)
+
+            # Efficiency = task_weight * capacity_bonus * battery_bonus / distance
+            # This makes heavy tasks prefer "stronger" vehicles (more capacity/battery)
+            efficiency = (
+                task.weight
+                * (1.0 + capacity_ratio)
+                * (0.8 + battery_ratio)
+                / (total_distance + 1)
+            )
+            candidates.append((efficiency, total_distance, vehicle))
 
         if candidates:
-            candidates.sort(key=lambda x: x[0], reverse=True)
-            _, best_vehicle, _ = candidates[0]
+            # Sort by efficiency descending; break ties by shorter distance
+            candidates.sort(key=lambda x: (-x[0], x[1]))
+            _, _, best_vehicle = candidates[0]
             self._assign_to_vehicle(best_vehicle, task, map_obj)
             return best_vehicle
         return None
@@ -50,7 +63,6 @@ class MaxWeightScheduler(BaseScheduler):
         map_obj: TransportMap,
     ) -> None:
         """Append task to vehicle's route."""
-        # Add pickup and deliver actions to plan
         vehicle.action_plan.append({"type": "pickup", "task": task})
         vehicle.action_plan.append({"type": "deliver", "task": task})
 

@@ -44,12 +44,17 @@ class Simulator:
         self.vehicle_moving_time: List[float] = []
         self._charging_start_times: Dict[int, float] = {}
 
+        # Return-to-depot phase tracking
+        self._return_phase = False
+        self._all_returned = False
+
     def initialize(
         self,
         map_config: dict,
         fleet_config: List[dict],
         station_config: List[dict],
         scheduler_type: str,
+        seed: int = 42,
     ) -> None:
         """Initialize simulation environment."""
         self.scheduler_type = scheduler_type
@@ -59,6 +64,7 @@ class Simulator:
         self.map.generate_grid(
             map_config["num_nodes"],
             num_stations=len(station_config),
+            seed=seed,
         )
 
         # Add charging stations (use actual station nodes from generated map)
@@ -72,10 +78,12 @@ class Simulator:
             )
             self.charging_stations.append(station)
 
-        # Create fleet
+        # Create fleet - all vehicles start at depot
         for fc in fleet_config:
             vehicle = Vehicle(**fc)
-            vehicle.position = self.map.get_node_position(fc["start_node"])
+            vehicle.start_node = self.map.depot_node
+            vehicle.current_node = self.map.depot_node
+            vehicle.position = self.map.get_node_position(self.map.depot_node)
             self.fleet.append(vehicle)
 
         # Initialize metrics arrays
@@ -85,11 +93,12 @@ class Simulator:
         # Set scheduler
         self.scheduler = self._create_scheduler(scheduler_type)
 
-        # Create event generator
+        # Create event generator with same seed for reproducible comparisons
         self.event_generator = EventGenerator(
             task_count=self.config.get("task_count", 100),
             time_horizon=self.config.get("time_horizon", 1000),
             map_nodes=list(self.map.nodes.keys()),
+            seed=seed,
         )
         self.event_generator.generate_schedule()
 
@@ -143,7 +152,14 @@ class Simulator:
             # 5. Handle low battery
             self._handle_low_battery()
 
-            # 6. Calculate score
+            # 6. Check if all tasks are done and trigger return-to-depot
+            self._check_return_phase()
+
+            # 7. Handle return-to-depot for vehicles
+            if self._return_phase:
+                self._handle_return_to_depot()
+
+            # 8. Calculate score
             score = self._calculate_score()
 
             return self._get_state_snapshot(score)
@@ -158,6 +174,15 @@ class Simulator:
         if vehicle.status == VehicleStatus.MOVING:
             self._update_moving(vehicle)
         elif vehicle.status == VehicleStatus.IDLE:
+            # Idle vehicle with no pending tasks -> return to depot by default
+            if (
+                not vehicle.action_plan
+                and vehicle.current_node != self.map.depot_node
+                and not self._return_phase
+            ):
+                vehicle.action_plan.append(
+                    {"type": "depot_return", "target": self.map.depot_node}
+                )
             self._execute_next_action(vehicle)
 
     def _update_moving(self, vehicle: Vehicle) -> None:
@@ -304,6 +329,15 @@ class Simulator:
                 else:
                     station.join_queue(vehicle)
 
+        elif action_type == "depot_return":
+            target_node = action["target"]
+            vehicle.current_path_nodes = self.map.get_path(
+                vehicle.current_node, target_node
+            )
+            vehicle.current_path_index = 0
+            if len(vehicle.current_path_nodes) > 1:
+                vehicle.status = VehicleStatus.MOVING
+
     def _handle_low_battery(self) -> None:
         """Plan charging for vehicles with low battery."""
         for vehicle in self.fleet:
@@ -342,6 +376,82 @@ class Simulator:
                     vehicle.action_plan.insert(1, {"type": "charge", "station_id": station.id})
                     if vehicle.status == VehicleStatus.IDLE:
                         self._execute_next_action(vehicle)
+
+    def _check_return_phase(self) -> None:
+        """Check if all tasks are processed and enter return-to-depot phase."""
+        if self._return_phase or self._all_returned:
+            return
+
+        total_tasks = self.config.get("task_count", 100)
+        completed_or_failed = len(self.completed_tasks) + len(self.failed_tasks)
+        all_tasks_processed = completed_or_failed >= total_tasks
+        no_active = len(self.active_tasks) == 0
+
+        if all_tasks_processed and no_active:
+            self._return_phase = True
+
+    def _handle_return_to_depot(self) -> None:
+        """Command all vehicles to return to depot. Charge first if battery insufficient."""
+        depot = self.map.depot_node
+        all_returned = True
+
+        for vehicle in self.fleet:
+            # Skip vehicles already at depot and idle
+            if vehicle.current_node == depot and vehicle.status == VehicleStatus.IDLE:
+                continue
+
+            # Skip vehicles currently charging or waiting to charge
+            if vehicle.status in [VehicleStatus.CHARGING, VehicleStatus.WAITING_CHARGE]:
+                all_returned = False
+                continue
+
+            # Skip vehicles already moving toward a destination (depot or station)
+            if vehicle.status == VehicleStatus.MOVING and vehicle.current_path_nodes:
+                all_returned = False
+                continue
+
+            # Skip vehicles already have a return-to-depot plan in queue
+            if any(a.get("type") == "depot_return" for a in vehicle.action_plan):
+                all_returned = False
+                continue
+
+            # Vehicle is idle but not at depot - plan return
+            all_returned = False
+
+            # Clear any remaining task-related plans
+            vehicle.action_plan = []
+            vehicle.current_path_nodes = []
+            vehicle.current_path_index = 0
+            vehicle.progress = 0.0
+
+            # Calculate battery needed to return to depot
+            dist_to_depot = self.map.get_distance(vehicle.current_node, depot)
+            if dist_to_depot == float("inf"):
+                dist_to_depot = 0
+
+            consumption_to_depot = vehicle.get_consumption_rate() * dist_to_depot * 1.5
+
+            if vehicle.current_battery >= consumption_to_depot and dist_to_depot > 0:
+                # Direct return
+                vehicle.action_plan = [{"type": "depot_return", "target": depot}]
+                self._execute_next_action(vehicle)
+            else:
+                # Need to charge first
+                nearest_station = self.map.find_nearest_station(vehicle.current_node)
+                if nearest_station is not None:
+                    station = next(
+                        (s for s in self.charging_stations if s.node_id == nearest_station),
+                        None,
+                    )
+                    if station:
+                        vehicle.action_plan = [
+                            {"type": "depot_return", "target": nearest_station},
+                            {"type": "charge", "station_id": station.id},
+                            {"type": "depot_return", "target": depot},
+                        ]
+                        self._execute_next_action(vehicle)
+
+        self._all_returned = all_returned
 
     def _calculate_score(self) -> float:
         """Calculate total score."""
@@ -408,12 +518,14 @@ class Simulator:
             time.sleep(sleep_time)
 
     def _check_finished(self) -> bool:
-        """Check if simulation is complete."""
+        """Check if simulation is complete (all tasks done + all vehicles returned to depot)."""
         total_tasks = self.config.get("task_count", 100)
         completed_or_failed = len(self.completed_tasks) + len(self.failed_tasks)
         all_tasks_processed = completed_or_failed >= total_tasks
         no_active = len(self.active_tasks) == 0
-        return all_tasks_processed and no_active
+        if not all_tasks_processed or not no_active:
+            return False
+        return self._all_returned
 
     def pause(self) -> None:
         """Pause simulation."""
@@ -436,3 +548,5 @@ class Simulator:
         self.charging_count = 0
         self.vehicle_moving_time = []
         self._charging_start_times = {}
+        self._return_phase = False
+        self._all_returned = False

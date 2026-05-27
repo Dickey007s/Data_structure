@@ -1,5 +1,6 @@
 /**
  * MapRenderer - Renders road network, nodes and grid background
+ * Supports zoom with mouse wheel and pan with drag
  */
 class MapRenderer {
     constructor(canvas) {
@@ -11,7 +12,18 @@ class MapRenderer {
         this.offsetX = 0;
         this.offsetY = 0;
         this.padding = 40;
+        this.minScale = 0.3;
+        this.maxScale = 5;
+
+        // Pan state
+        this.isDragging = false;
+        this.dragStartX = 0;
+        this.dragStartY = 0;
+        this.dragOffsetX = 0;
+        this.dragOffsetY = 0;
+
         this.setupCanvas();
+        this.setupInteractions();
     }
 
     setupCanvas() {
@@ -25,6 +37,67 @@ class MapRenderer {
         };
         window.addEventListener('resize', resize);
         resize();
+    }
+
+    setupInteractions() {
+        // Mouse wheel zoom
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            this.zoomAt(e.offsetX, e.offsetY, zoomFactor);
+        }, { passive: false });
+
+        // Mouse drag pan
+        this.canvas.addEventListener('mousedown', (e) => {
+            this.isDragging = true;
+            this.dragStartX = e.clientX;
+            this.dragStartY = e.clientY;
+            this.dragOffsetX = this.offsetX;
+            this.dragOffsetY = this.offsetY;
+            this.canvas.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) return;
+            const dx = e.clientX - this.dragStartX;
+            const dy = e.clientY - this.dragStartY;
+            this.offsetX = this.dragOffsetX + dx;
+            this.offsetY = this.dragOffsetY + dy;
+        });
+
+        window.addEventListener('mouseup', () => {
+            this.isDragging = false;
+            this.canvas.style.cursor = 'grab';
+        });
+    }
+
+    zoomAt(screenX, screenY, factor) {
+        const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));
+        if (newScale === this.scale) return;
+
+        // Zoom towards mouse position
+        const worldX = (screenX - this.offsetX) / this.scale;
+        const worldY = (screenY - this.offsetY) / this.scale;
+
+        this.scale = newScale;
+        this.offsetX = screenX - worldX * this.scale;
+        this.offsetY = screenY - worldY * this.scale;
+    }
+
+    zoomIn() {
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        this.zoomAt(centerX, centerY, 1.3);
+    }
+
+    zoomOut() {
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        this.zoomAt(centerX, centerY, 0.77);
+    }
+
+    resetView() {
+        this.fitToView();
     }
 
     setMapData(nodes, edges) {
@@ -62,17 +135,20 @@ class MapRenderer {
     }
 
     drawGrid() {
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        this.ctx.strokeStyle = 'rgba(180, 190, 200, 0.25)';
         this.ctx.lineWidth = 1;
-        const gridSize = 30;
+        const gridSize = 30 * this.scale;
 
-        for (let x = 0; x < this.canvas.width; x += gridSize) {
+        const startX = this.offsetX % gridSize;
+        const startY = this.offsetY % gridSize;
+
+        for (let x = startX; x < this.canvas.width; x += gridSize) {
             this.ctx.beginPath();
             this.ctx.moveTo(x, 0);
             this.ctx.lineTo(x, this.canvas.height);
             this.ctx.stroke();
         }
-        for (let y = 0; y < this.canvas.height; y += gridSize) {
+        for (let y = startY; y < this.canvas.height; y += gridSize) {
             this.ctx.beginPath();
             this.ctx.moveTo(0, y);
             this.ctx.lineTo(this.canvas.width, y);
@@ -81,8 +157,8 @@ class MapRenderer {
     }
 
     drawRoads() {
-        this.ctx.strokeStyle = 'rgba(100, 150, 200, 0.3)';
-        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = 'rgba(100, 120, 140, 0.35)';
+        this.ctx.lineWidth = Math.max(1, 1.5 * this.scale);
 
         for (const edge of this.edges) {
             const u = this.nodes.find(n => n.id === edge.u);
@@ -102,29 +178,40 @@ class MapRenderer {
     drawNodes() {
         for (const node of this.nodes) {
             const pos = this.worldToScreen(node.x, node.y);
-            const radius = node.type === 'depot' ? 10 : 6;
+            const baseRadius = node.type === 'depot' ? 10 : 5;
+            const radius = Math.max(2, baseRadius * Math.min(this.scale, 2));
 
             this.ctx.save();
 
             switch (node.type) {
                 case 'depot':
-                    this.ctx.fillStyle = '#ffd700';
-                    this.ctx.shadowColor = '#ffd700';
-                    this.ctx.shadowBlur = 15;
-                    break;
-                case 'station':
-                    this.ctx.fillStyle = '#00ff88';
-                    this.ctx.shadowColor = '#00ff88';
+                    this.ctx.fillStyle = '#e74c3c';
+                    this.ctx.shadowColor = 'rgba(231, 76, 60, 0.4)';
                     this.ctx.shadowBlur = 10;
                     break;
+                case 'station':
+                    this.ctx.fillStyle = '#27ae60';
+                    this.ctx.shadowColor = 'rgba(39, 174, 96, 0.4)';
+                    this.ctx.shadowBlur = 8;
+                    break;
                 default:
-                    this.ctx.fillStyle = '#4a5568';
+                    this.ctx.fillStyle = '#5d6d7e';
                     this.ctx.shadowBlur = 0;
             }
 
             this.ctx.beginPath();
             this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
             this.ctx.fill();
+
+            // Depot label
+            if (node.type === 'depot' && this.scale > 0.6) {
+                this.ctx.fillStyle = '#2c3e50';
+                this.ctx.font = `bold ${Math.max(9, 11 * this.scale)}px sans-serif`;
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'bottom';
+                this.ctx.shadowBlur = 0;
+                this.ctx.fillText('仓库', pos.x, pos.y - radius - 3);
+            }
 
             this.ctx.restore();
         }

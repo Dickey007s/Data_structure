@@ -26,40 +26,42 @@ class VehicleRenderer {
             vehicle.position[0],
             vehicle.position[1]
         );
+        const scale = Math.min(this.mapRenderer.scale, 2);
+        const radius = Math.max(6, 10 * scale);
 
         this.ctx.save();
 
         // Battery indicator ring
         const batteryPct = vehicle.battery_pct;
-        const batteryColor = batteryPct > 0.3 ? '#00d9ff' :
-                            batteryPct > 0.1 ? '#f9a826' : '#e94560';
+        const batteryColor = batteryPct > 0.3 ? '#3498db' :
+                            batteryPct > 0.1 ? '#f39c12' : '#e74c3c';
 
         this.ctx.strokeStyle = batteryColor;
-        this.ctx.lineWidth = 3;
+        this.ctx.lineWidth = Math.max(2, 2.5 * scale);
         this.ctx.beginPath();
-        this.ctx.arc(pos.x, pos.y, 16, -Math.PI / 2,
+        this.ctx.arc(pos.x, pos.y, radius + 3, -Math.PI / 2,
                      -Math.PI / 2 + Math.PI * 2 * batteryPct);
         this.ctx.stroke();
 
         // Vehicle body
-        this.ctx.fillStyle = '#00d9ff';
-        this.ctx.shadowBlur = 15;
-        this.ctx.shadowColor = '#00d9ff';
+        this.ctx.fillStyle = '#3498db';
+        this.ctx.shadowBlur = 6;
+        this.ctx.shadowColor = 'rgba(52, 152, 219, 0.4)';
         this.ctx.beginPath();
-        this.ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+        this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Load indicator
         if (vehicle.load_pct > 0) {
-            this.ctx.fillStyle = `rgba(233, 69, 96, ${vehicle.load_pct * 0.6})`;
+            this.ctx.fillStyle = `rgba(231, 76, 60, ${vehicle.load_pct * 0.5})`;
             this.ctx.beginPath();
-            this.ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2);
+            this.ctx.arc(pos.x, pos.y, radius * 0.6, 0, Math.PI * 2);
             this.ctx.fill();
         }
 
         // Vehicle ID
-        this.ctx.fillStyle = '#1a1a2e';
-        this.ctx.font = 'bold 10px sans-serif';
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = `bold ${Math.max(8, 9 * scale)}px sans-serif`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.shadowBlur = 0;
@@ -72,8 +74,8 @@ class VehicleRenderer {
         if (!vehicle.path || vehicle.path.length < 2) return;
 
         this.ctx.save();
-        this.ctx.strokeStyle = 'rgba(0, 217, 255, 0.12)';
-        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.18)';
+        this.ctx.lineWidth = Math.max(1, 1.5 * this.mapRenderer.scale);
         this.ctx.setLineDash([5, 5]);
 
         this.ctx.beginPath();

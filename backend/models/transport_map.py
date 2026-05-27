@@ -23,66 +23,133 @@ class TransportMap:
         self,
         num_nodes: int,
         num_stations: int = 3,
-        connection_prob: float = 0.4,
         seed: int = 42,
     ) -> None:
-        """Generate a grid-like road network."""
+        """Generate a grid-like road network with randomized node positions.
+
+        Features:
+        - Grid layout with random jitter for visual variety
+        - Guaranteed adjacency connections (up, down, left, right)
+        - Optional diagonal connections
+        - Depot placed near center of map
+        """
         random.seed(seed)
+
+        # Use larger node count for richer map
+        if num_nodes < 40:
+            num_nodes = 64
 
         # Calculate grid dimensions
         cols = int(math.sqrt(num_nodes))
         rows = (num_nodes + cols - 1) // cols
 
-        # Generate nodes in a grid
+        # Ensure at least a reasonable grid
+        cols = max(cols, 6)
+        rows = max(rows, 6)
+        num_nodes = min(num_nodes, cols * rows)
+
+        # Generate nodes in a grid with jitter
         node_id = 0
+        jitter_amount = 0.15  # 15% cell size jitter
+
         for row in range(rows):
             for col in range(cols):
                 if node_id >= num_nodes:
                     break
 
-                x = (col / max(cols - 1, 1)) * self.width
-                y = (row / max(rows - 1, 1)) * self.height
+                # Base grid position
+                base_x = (col / max(cols - 1, 1)) * self.width
+                base_y = (row / max(rows - 1, 1)) * self.height
 
-                # First node is depot
-                node_type = "depot" if node_id == 0 else "normal"
-                self.add_node(node_id, x, y, node_type)
+                # Add random jitter
+                cell_w = self.width / max(cols - 1, 1)
+                cell_h = self.height / max(rows - 1, 1)
+                jitter_x = random.uniform(-cell_w * jitter_amount, cell_w * jitter_amount)
+                jitter_y = random.uniform(-cell_h * jitter_amount, cell_h * jitter_amount)
+
+                x = max(0, min(self.width, base_x + jitter_x))
+                y = max(0, min(self.height, base_y + jitter_y))
+
+                self.add_node(node_id, x, y, "normal")
                 node_id += 1
 
-        # Add some random connections for irregularity
-        extra_nodes = num_nodes - node_id
-        for i in range(extra_nodes):
-            x = random.uniform(0, self.width)
-            y = random.uniform(0, self.height)
-            self.add_node(node_id, x, y, "normal")
-            node_id += 1
+        # Place depot near center
+        center_row = rows // 2
+        center_col = cols // 2
+        center_node_id = center_row * cols + center_col
+        center_node_id = min(center_node_id, node_id - 1)
 
-        # Connect neighboring nodes
-        for node_id in self.nodes:
-            x, y, _ = self.nodes[node_id]
-            # Find nearest nodes
-            neighbors = []
-            for other_id in self.nodes:
-                if other_id == node_id:
+        self.depot_node = center_node_id
+        cx, cy, _ = self.nodes[center_node_id]
+        self.nodes[center_node_id] = (cx, cy, "depot")
+        self.graph.nodes[center_node_id]["type"] = "depot"
+
+        # Build guaranteed grid connections (adjacent neighbors)
+        for row in range(rows):
+            for col in range(cols):
+                nid = row * cols + col
+                if nid >= node_id:
                     continue
-                ox, oy, _ = self.nodes[other_id]
-                dist = math.sqrt((x - ox) ** 2 + (y - oy) ** 2)
-                neighbors.append((dist, other_id))
 
-            neighbors.sort()
-            # Connect to 2-4 nearest neighbors
-            num_connections = random.randint(2, 4)
-            for dist, other_id in neighbors[:num_connections]:
-                if not self.graph.has_edge(node_id, other_id):
-                    self.add_road(node_id, other_id, dist)
+                # Right neighbor
+                if col + 1 < cols:
+                    right_id = row * cols + (col + 1)
+                    if right_id < node_id:
+                        self._add_edge_if_not_exists(nid, right_id)
 
-        # Assign station nodes (pick from non-depot nodes)
+                # Down neighbor
+                if row + 1 < rows:
+                    down_id = (row + 1) * cols + col
+                    if down_id < node_id:
+                        self._add_edge_if_not_exists(nid, down_id)
+
+                # Diagonal connections (random, ~40% probability)
+                if row + 1 < rows and col + 1 < cols:
+                    diag_id = (row + 1) * cols + (col + 1)
+                    if diag_id < node_id and random.random() < 0.4:
+                        self._add_edge_if_not_exists(nid, diag_id)
+
+                if row + 1 < rows and col - 1 >= 0:
+                    diag_id = (row + 1) * cols + (col - 1)
+                    if diag_id < node_id and random.random() < 0.4:
+                        self._add_edge_if_not_exists(nid, diag_id)
+
+        # Assign station nodes (pick from non-depot, spread out)
         non_depot = [n for n in self.nodes if n != self.depot_node]
         if len(non_depot) >= num_stations:
-            self.station_nodes = sorted(random.sample(non_depot, num_stations))
+            # Try to spread stations across the map
+            self.station_nodes = []
+            quadrants = [
+                [n for n in non_depot if self.nodes[n][0] < self.width / 2 and self.nodes[n][1] < self.height / 2],
+                [n for n in non_depot if self.nodes[n][0] >= self.width / 2 and self.nodes[n][1] < self.height / 2],
+                [n for n in non_depot if self.nodes[n][0] < self.width / 2 and self.nodes[n][1] >= self.height / 2],
+                [n for n in non_depot if self.nodes[n][0] >= self.width / 2 and self.nodes[n][1] >= self.height / 2],
+            ]
+
+            for i in range(num_stations):
+                q = quadrants[i % len(quadrants)]
+                if q:
+                    station = random.choice(q)
+                    self.station_nodes.append(station)
+                    q.remove(station)
+                else:
+                    remaining = [n for n in non_depot if n not in self.station_nodes]
+                    if remaining:
+                        self.station_nodes.append(random.choice(remaining))
+
+            self.station_nodes = sorted(self.station_nodes)
             for sid in self.station_nodes:
                 x, y, _ = self.nodes[sid]
                 self.nodes[sid] = (x, y, "station")
                 self.graph.nodes[sid]["type"] = "station"
+
+    def _add_edge_if_not_exists(self, u: int, v: int) -> None:
+        """Add edge if it doesn't already exist."""
+        if not self.graph.has_edge(u, v):
+            ux, uy, _ = self.nodes[u]
+            vx, vy, _ = self.nodes[v]
+            dist = math.sqrt((ux - vx) ** 2 + (uy - vy) ** 2)
+            self.graph.add_edge(u, v, weight=round(dist, 2))
 
     def add_node(self, node_id: int, x: float, y: float, node_type: str = "normal") -> None:
         """Add a node to the map."""

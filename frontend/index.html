@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>新能源物流车队协同调度仿真</title>
     <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -25,6 +26,7 @@
                     <button id="btn-start" class="btn btn-success" disabled>开始</button>
                     <button id="btn-pause" class="btn btn-warning" disabled>暂停</button>
                     <button id="btn-reset" class="btn btn-danger">重置</button>
+                    <button id="btn-compare" class="btn btn-primary">对比实验</button>
                 </div>
 
                 <div class="panel-section">
@@ -38,6 +40,12 @@
                             <option value="nearest">最近优先</option>
                             <option value="max_weight">最大重量优先</option>
                         </select>
+                    </label>
+                    <label>地图种子:
+                        <div class="seed-input">
+                            <input type="number" id="config-seed" value="42" min="1" max="99999">
+                            <button id="btn-random-seed" class="btn btn-primary" style="width:auto;padding:6px 10px;font-size:0.75rem;">随机</button>
+                        </div>
                     </label>
                 </div>
 
@@ -59,13 +67,55 @@
                     <div class="legend-item"><span class="icon delivery"></span> 送货点</div>
                     <div class="legend-item"><span class="icon vehicle"></span> 车辆</div>
                 </div>
+                <div class="zoom-controls">
+                    <button id="btn-zoom-in" title="放大">+</button>
+                    <button id="btn-zoom-out" title="缩小">-</button>
+                    <button id="btn-zoom-reset" title="重置">⟲</button>
+                </div>
+                <div id="comparison-panel" class="comparison-panel">
+                    <div class="comparison-header">
+                        <h2>算法性能对比实验结果</h2>
+                        <button id="btn-close-comparison" class="close-btn" title="关闭">&times;</button>
+                    </div>
+                    <div class="comparison-body">
+                        <div class="chart-grid">
+                            <div class="chart-box">
+                                <div class="chart-title">(a) 任务完成率与超时率</div>
+                                <canvas id="chart-completion"></canvas>
+                            </div>
+                            <div class="chart-box">
+                                <div class="chart-title">(b) 平均完成用时与单位任务距离</div>
+                                <canvas id="chart-efficiency"></canvas>
+                            </div>
+                            <div class="chart-box">
+                                <div class="chart-title">(c) 能耗与充电指标</div>
+                                <canvas id="chart-energy"></canvas>
+                            </div>
+                            <div class="chart-box">
+                                <div class="chart-title">(d) 综合性能雷达图</div>
+                                <canvas id="chart-radar"></canvas>
+                            </div>
+                        </div>
+                        <div class="table-section">
+                            <div class="chart-title">表1 三种调度算法实验结果对比</div>
+                            <table class="comparison-table" id="comparison-table">
+                                <thead>
+                                    <tr>
+                                        <th>评价指标</th>
+                                        <th>插入启发式 (IH)</th>
+                                        <th>最近优先 (NF)</th>
+                                        <th>最大重量优先 (MW)</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="comparison-summary" id="comparison-summary"></div>
+                    </div>
+                </div>
             </main>
 
             <aside class="info-panel">
-                <div class="panel-section">
-                    <h3>车辆状态</h3>
-                    <div id="vehicle-list" class="scrollable-list"></div>
-                </div>
                 <div class="panel-section">
                     <h3>任务列表</h3>
                     <div id="task-list" class="scrollable-list"></div>
@@ -76,11 +126,6 @@
                 </div>
             </aside>
         </div>
-
-        <footer class="log-panel">
-            <h4>运行日志</h4>
-            <div id="log-output" class="log-content"></div>
-        </footer>
     </div>
 
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
