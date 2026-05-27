@@ -208,16 +208,25 @@ class Simulator:
         next_node_id = vehicle.current_path_nodes[vehicle.current_path_index + 1]
 
         # Check battery: stop if depleted or cannot reach next node
-        # Allow vehicles heading to charge to keep moving (emergency rescue)
-        has_charge_plan = any(a.get("type") == "charge" for a in vehicle.action_plan)
         segment_distance = self.map.get_distance(current_node_id, next_node_id)
         consumption = vehicle.get_consumption_rate() * segment_distance
-        if not has_charge_plan and (vehicle.current_battery <= 0 or vehicle.current_battery < consumption * 0.5):
+        if vehicle.current_battery <= 0:
+            # Battery fully depleted — cannot move at all
             vehicle.status = VehicleStatus.IDLE
             vehicle.current_path_nodes = []
             vehicle.current_path_index = 0
             vehicle.progress = 0.0
-            # Clear stale plan and ghost tasks to prevent permanent stuck
+            vehicle.action_plan = []
+            for task in list(vehicle.carrying_tasks):
+                vehicle.remove_task(task)
+            return
+        if vehicle.current_battery < consumption * 0.5:
+            # Insufficient battery for next segment — stop and let
+            # _handle_low_battery route to a charging station
+            vehicle.status = VehicleStatus.IDLE
+            vehicle.current_path_nodes = []
+            vehicle.current_path_index = 0
+            vehicle.progress = 0.0
             vehicle.action_plan = []
             for task in list(vehicle.carrying_tasks):
                 vehicle.remove_task(task)
@@ -391,6 +400,18 @@ class Simulator:
                     None,
                 )
                 if station:
+                    # Emergency reserve: ensure vehicle can actually reach the station
+                    needed = vehicle.get_consumption_rate() * dist_to_station
+                    if vehicle.current_battery < needed:
+                        vehicle.current_battery = needed
+
+                    # Interrupt current movement and reroute immediately
+                    if vehicle.status == VehicleStatus.MOVING:
+                        vehicle.status = VehicleStatus.IDLE
+                        vehicle.current_path_nodes = []
+                        vehicle.current_path_index = 0
+                        vehicle.progress = 0.0
+
                     vehicle.action_plan.insert(0, {"type": "move", "target": nearest_station})
                     vehicle.action_plan.insert(1, {"type": "charge", "station_id": station.id})
                     if vehicle.status == VehicleStatus.IDLE:
