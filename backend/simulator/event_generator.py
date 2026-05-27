@@ -42,7 +42,7 @@ class EventGenerator:
 
             weight = round(random.uniform(*self.weight_range), 2)
             ready_time = t
-            due_time = t + random.randint(300, 800)
+            due_time = t + random.randint(500, 1200)
 
             self.schedule.append({
                 "id": i + 1,

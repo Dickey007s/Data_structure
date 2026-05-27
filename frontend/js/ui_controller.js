@@ -82,7 +82,7 @@ class UIController {
             ],
             scheduler: document.getElementById('config-scheduler').value,
             task_count: parseInt(document.getElementById('config-tasks').value),
-            time_horizon: 1000,
+            time_horizon: 2000,
             tick_interval: 1,
             sim_speed: parseFloat(document.getElementById('config-speed').value),
             seed: seed
@@ -185,7 +185,7 @@ class UIController {
                 {id: 2, node_id: 40, total_slots: 2, charge_rate: 30}
             ],
             task_count: taskCount,
-            time_horizon: 1000,
+            time_horizon: 2000,
             tick_interval: 1,
             sim_speed: simSpeed,
             seed: seed
