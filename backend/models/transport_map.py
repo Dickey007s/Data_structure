@@ -114,30 +114,10 @@ class TransportMap:
                     if diag_id < node_id and random.random() < 0.4:
                         self._add_edge_if_not_exists(nid, diag_id)
 
-        # Assign station nodes (pick from non-depot, spread out)
+        # Assign station nodes (random from non-depot, fully randomized by seed)
         non_depot = [n for n in self.nodes if n != self.depot_node]
         if len(non_depot) >= num_stations:
-            # Try to spread stations across the map
-            self.station_nodes = []
-            quadrants = [
-                [n for n in non_depot if self.nodes[n][0] < self.width / 2 and self.nodes[n][1] < self.height / 2],
-                [n for n in non_depot if self.nodes[n][0] >= self.width / 2 and self.nodes[n][1] < self.height / 2],
-                [n for n in non_depot if self.nodes[n][0] < self.width / 2 and self.nodes[n][1] >= self.height / 2],
-                [n for n in non_depot if self.nodes[n][0] >= self.width / 2 and self.nodes[n][1] >= self.height / 2],
-            ]
-
-            for i in range(num_stations):
-                q = quadrants[i % len(quadrants)]
-                if q:
-                    station = random.choice(q)
-                    self.station_nodes.append(station)
-                    q.remove(station)
-                else:
-                    remaining = [n for n in non_depot if n not in self.station_nodes]
-                    if remaining:
-                        self.station_nodes.append(random.choice(remaining))
-
-            self.station_nodes = sorted(self.station_nodes)
+            self.station_nodes = sorted(random.sample(non_depot, num_stations))
             for sid in self.station_nodes:
                 x, y, _ = self.nodes[sid]
                 self.nodes[sid] = (x, y, "station")
