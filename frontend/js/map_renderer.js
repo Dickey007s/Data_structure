@@ -185,9 +185,9 @@ class MapRenderer {
 
             switch (node.type) {
                 case 'depot':
-                    this.ctx.fillStyle = '#e74c3c';
-                    this.ctx.shadowColor = 'rgba(231, 76, 60, 0.4)';
-                    this.ctx.shadowBlur = 10;
+                    this.ctx.fillStyle = '#8e44ad';
+                    this.ctx.shadowColor = 'rgba(142, 68, 173, 0.55)';
+                    this.ctx.shadowBlur = 12;
                     break;
                 case 'station':
                     this.ctx.fillStyle = '#27ae60';
@@ -199,9 +199,13 @@ class MapRenderer {
                     this.ctx.shadowBlur = 0;
             }
 
-            this.ctx.beginPath();
-            this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
+            if (node.type === 'depot') {
+                this.drawPentagon(pos.x, pos.y, radius * 1.55);
+            } else {
+                this.ctx.beginPath();
+                this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
 
             // Depot label
             if (node.type === 'depot' && this.scale > 0.6) {
@@ -215,6 +219,22 @@ class MapRenderer {
 
             this.ctx.restore();
         }
+    }
+
+    drawPentagon(x, y, radius) {
+        this.ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+            const angle = -Math.PI / 2 + i * (Math.PI * 2 / 5);
+            const px = x + Math.cos(angle) * radius;
+            const py = y + Math.sin(angle) * radius;
+            if (i === 0) {
+                this.ctx.moveTo(px, py);
+            } else {
+                this.ctx.lineTo(px, py);
+            }
+        }
+        this.ctx.closePath();
+        this.ctx.fill();
     }
 
     worldToScreen(x, y) {

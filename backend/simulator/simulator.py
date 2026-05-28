@@ -254,6 +254,9 @@ class Simulator:
             if not self._consume_arrived_actions(vehicle):
                 return
 
+            if self._sync_route_after_node(vehicle):
+                return
+
             if vehicle.current_path_index >= len(vehicle.current_path_nodes) - 1:
                 self._on_arrive_at_node(vehicle)
         else:
@@ -293,6 +296,33 @@ class Simulator:
                 return
 
         self._execute_next_action(vehicle)
+
+    def _sync_route_after_node(self, vehicle: Vehicle) -> bool:
+        """Apply route changes only after the vehicle reaches a graph node."""
+        if vehicle.status != VehicleStatus.MOVING:
+            return False
+
+        if not vehicle.action_plan:
+            if vehicle.current_path_index < len(vehicle.current_path_nodes) - 1:
+                vehicle.status = VehicleStatus.IDLE
+                vehicle.current_path_nodes = []
+                vehicle.current_path_index = 0
+                vehicle.progress = 0.0
+                return True
+            return False
+
+        target = self._get_action_target(vehicle.action_plan[0])
+        if target is None or target == vehicle.current_node:
+            return False
+
+        path = self.map.get_path(vehicle.current_node, target)
+        if path and len(path) > 1:
+            vehicle.current_path_nodes = path
+            vehicle.current_path_index = 0
+            vehicle.progress = 0.0
+            return True
+
+        return False
 
     def _consume_arrived_actions(self, vehicle: Vehicle) -> bool:
         """Consume route actions whose target is the node just reached."""
@@ -487,13 +517,6 @@ class Simulator:
                     needed = vehicle.get_consumption_rate() * dist_to_station
                     if vehicle.current_battery < needed:
                         vehicle.current_battery = needed
-
-                    # Interrupt current movement and reroute immediately
-                    if vehicle.status == VehicleStatus.MOVING:
-                        vehicle.status = VehicleStatus.IDLE
-                        vehicle.current_path_nodes = []
-                        vehicle.current_path_index = 0
-                        vehicle.progress = 0.0
 
                     vehicle.action_plan.insert(0, {"type": "move", "target": nearest_station})
                     vehicle.action_plan.insert(1, {"type": "charge", "station_id": station.id})

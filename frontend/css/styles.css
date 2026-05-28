@@ -201,8 +201,11 @@ input, select {
 }
 
 .icon.depot {
-    background: #e74c3c;
-    box-shadow: 0 0 6px rgba(231, 76, 60, 0.4);
+    background: #8e44ad;
+    border-radius: 0;
+    clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+    box-shadow: 0 0 7px rgba(142, 68, 173, 0.5);
+    transform: scale(1.15);
 }
 
 .icon.station {

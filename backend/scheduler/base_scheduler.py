@@ -53,6 +53,42 @@ class BaseScheduler(ABC):
 
         return committed_load + task.weight <= vehicle.max_capacity
 
+    def refresh_vehicle_path(self, vehicle, map_obj) -> None:
+        """Rebuild a vehicle path unless it is already moving on an edge."""
+        if vehicle.status.value == "moving" and vehicle.current_path_nodes:
+            return
+
+        vehicle.current_path_nodes = [vehicle.current_node]
+        current = vehicle.current_node
+
+        for action in vehicle.action_plan:
+            target = self.get_action_target(action)
+            if target is None:
+                continue
+
+            if target != current:
+                path = map_obj.get_path(current, target)
+                if path and len(path) > 1:
+                    vehicle.current_path_nodes.extend(path[1:])
+                else:
+                    vehicle.current_path_nodes.append(target)
+                current = target
+
+        vehicle.current_path_index = 0
+        if len(vehicle.current_path_nodes) > 1:
+            vehicle.status = type(vehicle.status).MOVING
+
+    def get_action_target(self, action: dict):
+        """Return the target node for a route action."""
+        action_type = action.get("type")
+        if action_type == "pickup":
+            return action["task"].pickup_node
+        if action_type == "deliver":
+            return action["task"].delivery_node
+        if action_type in ("move", "depot_return"):
+            return action["target"]
+        return None
+
     def check_battery(
         self,
         vehicle,

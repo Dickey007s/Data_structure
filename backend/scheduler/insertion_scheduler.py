@@ -129,32 +129,7 @@ class InsertionScheduler(BaseScheduler):
         vehicle.action_plan.insert(p_idx + 1, {"type": "move", "target": map_obj.depot_node})
         vehicle.action_plan.insert(d_idx + 2, {"type": "deliver", "task": task})
 
-        # Rebuild full path from action plan
-        vehicle.current_path_nodes = [vehicle.current_node]
-        current = vehicle.current_node
-
-        for action in vehicle.action_plan:
-            if action["type"] == "pickup":
-                target = action["task"].pickup_node
-            elif action["type"] == "deliver":
-                target = action["task"].delivery_node
-            elif action["type"] == "move":
-                target = action["target"]
-            else:
-                continue
-
-            if target != current:
-                path = map_obj.get_path(current, target)
-                if path and len(path) > 1:
-                    vehicle.current_path_nodes.extend(path[1:])
-                else:
-                    vehicle.current_path_nodes.append(target)
-                current = target
-
-        vehicle.current_path_index = 0
-        if len(vehicle.current_path_nodes) > 1:
-            vehicle.status = VehicleStatus.MOVING
-
+        self.refresh_vehicle_path(vehicle, map_obj)
         task.status = Task.STATUS_ASSIGNED
         task.assigned_vehicle = vehicle.id
 
