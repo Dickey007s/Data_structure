@@ -38,7 +38,20 @@ class BaseScheduler(ABC):
 
     def check_capacity(self, vehicle, task) -> bool:
         """Check if vehicle can carry the task weight."""
-        return vehicle.can_carry(task.weight)
+        committed_load = vehicle.current_load
+        reserved_task_ids = set()
+
+        for action in vehicle.action_plan:
+            planned_task = action.get("task")
+            if planned_task is None or planned_task in vehicle.carrying_tasks:
+                continue
+            if planned_task.id in reserved_task_ids:
+                continue
+
+            committed_load += planned_task.weight
+            reserved_task_ids.add(planned_task.id)
+
+        return committed_load + task.weight <= vehicle.max_capacity
 
     def check_battery(
         self,

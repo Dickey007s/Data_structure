@@ -38,8 +38,8 @@ class TaskRenderer {
             this.drawTriangle(pickupPos.x, pickupPos.y, Math.max(5, 7 * scale));
         }
 
-        // Delivery - red square (only after pickup)
-        if (task.status === 'picking' || task.status === 'delivering') {
+        // Delivery - red square (only after returning picked goods to depot)
+        if (task.status === 'delivering') {
             const sz = Math.max(4, 6 * scale);
             this.ctx.fillStyle = '#e74c3c';
             this.ctx.shadowBlur = 4;
@@ -48,7 +48,7 @@ class TaskRenderer {
         }
 
         // Connection line while in transit
-        if (task.status === 'picking' || task.status === 'delivering') {
+        if (task.status === 'delivering') {
             this.ctx.strokeStyle = 'rgba(243, 156, 18, 0.25)';
             this.ctx.lineWidth = Math.max(1, scale);
             this.ctx.setLineDash([3, 3]);

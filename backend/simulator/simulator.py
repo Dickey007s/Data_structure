@@ -243,12 +243,16 @@ class Simulator:
             vehicle.current_path_index += 1
             vehicle.progress = 0.0
             vehicle.current_node = next_node_id
+            vehicle.position = self.map.get_node_position(vehicle.current_node)
             vehicle.move(segment_distance)
 
             # Track distance and moving time
             if vehicle.id < len(self.total_distance_traveled):
                 self.total_distance_traveled[vehicle.id] += segment_distance
                 self.vehicle_moving_time[vehicle.id] += self.tick_interval
+
+            if not self._consume_arrived_actions(vehicle):
+                return
 
             if vehicle.current_path_index >= len(vehicle.current_path_nodes) - 1:
                 self._on_arrive_at_node(vehicle)
@@ -290,6 +294,87 @@ class Simulator:
 
         self._execute_next_action(vehicle)
 
+    def _consume_arrived_actions(self, vehicle: Vehicle) -> bool:
+        """Consume route actions whose target is the node just reached."""
+        while vehicle.action_plan:
+            action = vehicle.action_plan[0]
+            target = self._get_action_target(action)
+            if target != vehicle.current_node:
+                break
+
+            action = vehicle.action_plan.pop(0)
+            action_type = action["type"]
+
+            if action_type == "pickup":
+                if not self._pickup_task(vehicle, action["task"]):
+                    vehicle.status = VehicleStatus.IDLE
+                    vehicle.current_path_nodes = []
+                    vehicle.current_path_index = 0
+                    vehicle.progress = 0.0
+                    return False
+            elif action_type == "move":
+                self._mark_depot_dropoff_ready(vehicle, action["target"])
+            elif action_type == "deliver":
+                self._deliver_task(vehicle, action["task"])
+            elif action_type == "depot_return":
+                pass
+            else:
+                vehicle.action_plan.insert(0, action)
+                break
+
+        return True
+
+    def _get_action_target(self, action: dict) -> Optional[int]:
+        """Return the node at which an action should be consumed."""
+        action_type = action.get("type")
+        if action_type == "pickup":
+            return action["task"].pickup_node
+        if action_type == "deliver":
+            return action["task"].delivery_node
+        if action_type in ("move", "depot_return"):
+            return action["target"]
+        return None
+
+    def _pickup_task(self, vehicle: Vehicle, task: Task) -> bool:
+        """Mark a task picked up at its pickup node."""
+        if self.current_time < task.ready_time:
+            vehicle.action_plan.insert(0, {"type": "pickup", "task": task})
+            return False
+
+        if task.status == Task.STATUS_TIMEOUT:
+            vehicle.action_plan = [
+                a for a in vehicle.action_plan
+                if not (a.get("type") in ("pickup", "deliver") and a.get("task") is task)
+            ]
+            return True
+
+        task.status = Task.STATUS_PICKING
+        if task not in vehicle.carrying_tasks:
+            vehicle.add_task(task)
+        return True
+
+    def _mark_depot_dropoff_ready(self, vehicle: Vehicle, target_node: int) -> None:
+        """Reveal delivery markers once picked goods have returned to depot."""
+        if target_node != self.map.depot_node:
+            return
+
+        for task in vehicle.carrying_tasks:
+            if task.status == Task.STATUS_PICKING:
+                task.status = Task.STATUS_DELIVERING
+
+    def _deliver_task(self, vehicle: Vehicle, task: Task) -> None:
+        """Complete a task at its delivery node."""
+        vehicle.remove_task(task)
+        if task.status == Task.STATUS_TIMEOUT:
+            return
+
+        task.status = Task.STATUS_COMPLETED
+        task.completed_time = self.current_time
+        if task not in self.completed_tasks:
+            self.completed_tasks.append(task)
+        if task in self.active_tasks:
+            self.active_tasks.remove(task)
+
     def _execute_next_action(self, vehicle: Vehicle) -> None:
         """Execute next action from action_plan."""
         if not vehicle.action_plan:
@@ -300,43 +385,41 @@ class Simulator:
 
         if action_type == "pickup":
             task = action["task"]
-            # Wait if task is not yet ready
-            if self.current_time < task.ready_time:
+            if vehicle.current_node != task.pickup_node:
                 vehicle.action_plan.insert(0, action)
+                vehicle.current_path_nodes = self.map.get_path(
+                    vehicle.current_node, task.pickup_node
+                )
+                vehicle.current_path_index = 0
+                if len(vehicle.current_path_nodes) > 1:
+                    vehicle.status = VehicleStatus.MOVING
                 return
-            # Skip if task already timed out
-            if task.status == Task.STATUS_TIMEOUT:
-                vehicle.status = VehicleStatus.IDLE
-                # Clean up remaining actions for this dead task
-                vehicle.action_plan = [
-                    a for a in vehicle.action_plan
-                    if not (a.get("type") in ("pickup", "deliver") and a.get("task") is task)
-                ]
+            # Wait if task is not yet ready
+            if not self._pickup_task(vehicle, task):
                 return
-            vehicle.status = VehicleStatus.LOADING
-            task.status = Task.STATUS_PICKING
-            if task not in vehicle.carrying_tasks:
-                vehicle.add_task(task)
-            task.status = Task.STATUS_DELIVERING
             vehicle.status = VehicleStatus.IDLE
 
         elif action_type == "deliver":
             task = action["task"]
-            vehicle.status = VehicleStatus.UNLOADING
-            vehicle.remove_task(task)
-            # Only count as completed if not already timed out
-            if task.status == Task.STATUS_TIMEOUT:
-                vehicle.status = VehicleStatus.IDLE
+            if vehicle.current_node != task.delivery_node:
+                vehicle.action_plan.insert(0, action)
+                vehicle.current_path_nodes = self.map.get_path(
+                    vehicle.current_node, task.delivery_node
+                )
+                vehicle.current_path_index = 0
+                if len(vehicle.current_path_nodes) > 1:
+                    vehicle.status = VehicleStatus.MOVING
                 return
-            task.status = Task.STATUS_COMPLETED
-            task.completed_time = self.current_time
-            self.completed_tasks.append(task)
-            if task in self.active_tasks:
-                self.active_tasks.remove(task)
+            vehicle.status = VehicleStatus.UNLOADING
+            self._deliver_task(vehicle, task)
             vehicle.status = VehicleStatus.IDLE
 
         elif action_type == "move":
             target_node = action["target"]
+            if target_node == vehicle.current_node:
+                self._mark_depot_dropoff_ready(vehicle, target_node)
+                self._execute_next_action(vehicle)
+                return
             vehicle.current_path_nodes = self.map.get_path(
                 vehicle.current_node, target_node
             )

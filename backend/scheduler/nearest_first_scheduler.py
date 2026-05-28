@@ -82,7 +82,6 @@ class NearestFirstScheduler(BaseScheduler):
         if len(vehicle.current_path_nodes) > 1:
             vehicle.status = VehicleStatus.MOVING
 
-        vehicle.add_task(task)
         task.status = Task.STATUS_ASSIGNED
         task.assigned_vehicle = vehicle.id
 
