@@ -178,7 +178,14 @@ class MapRenderer {
     drawNodes() {
         for (const node of this.nodes) {
             const pos = this.worldToScreen(node.x, node.y);
-            const baseRadius = node.type === 'depot' ? 10 : 5;
+            let baseRadius;
+            if (node.type === 'depot') {
+                baseRadius = 10;
+            } else if (node.type === 'sub_depot') {
+                baseRadius = 8;
+            } else {
+                baseRadius = 5;
+            }
             const radius = Math.max(2, baseRadius * Math.min(this.scale, 2));
 
             this.ctx.save();
@@ -194,6 +201,11 @@ class MapRenderer {
                     this.ctx.shadowColor = 'rgba(39, 174, 96, 0.4)';
                     this.ctx.shadowBlur = 8;
                     break;
+                case 'sub_depot':
+                    this.ctx.fillStyle = '#9b59b6';
+                    this.ctx.shadowColor = 'rgba(155, 89, 182, 0.45)';
+                    this.ctx.shadowBlur = 9;
+                    break;
                 default:
                     this.ctx.fillStyle = '#5d6d7e';
                     this.ctx.shadowBlur = 0;
@@ -201,20 +213,23 @@ class MapRenderer {
 
             if (node.type === 'depot') {
                 this.drawPentagon(pos.x, pos.y, radius * 1.55);
+            } else if (node.type === 'sub_depot') {
+                this.drawDiamond(pos.x, pos.y, radius * 1.45);
             } else {
                 this.ctx.beginPath();
                 this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
                 this.ctx.fill();
             }
 
-            // Depot label
-            if (node.type === 'depot' && this.scale > 0.6) {
+            // Depot / sub-depot label
+            if ((node.type === 'depot' || node.type === 'sub_depot') && this.scale > 0.6) {
                 this.ctx.fillStyle = '#2c3e50';
                 this.ctx.font = `bold ${Math.max(9, 11 * this.scale)}px sans-serif`;
                 this.ctx.textAlign = 'center';
                 this.ctx.textBaseline = 'bottom';
                 this.ctx.shadowBlur = 0;
-                this.ctx.fillText('仓库', pos.x, pos.y - radius - 3);
+                const label = node.type === 'depot' ? '仓库' : '子仓库';
+                this.ctx.fillText(label, pos.x, pos.y - radius - 3);
             }
 
             this.ctx.restore();
@@ -233,6 +248,16 @@ class MapRenderer {
                 this.ctx.lineTo(px, py);
             }
         }
+        this.ctx.closePath();
+        this.ctx.fill();
+    }
+
+    drawDiamond(x, y, radius) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y - radius);
+        this.ctx.lineTo(x + radius, y);
+        this.ctx.lineTo(x, y + radius);
+        this.ctx.lineTo(x - radius, y);
         this.ctx.closePath();
         this.ctx.fill();
     }

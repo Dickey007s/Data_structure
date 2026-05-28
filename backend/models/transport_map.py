@@ -18,11 +18,13 @@ class TransportMap:
         self.grid_type = grid_type
         self.depot_node = 0
         self.station_nodes: List[int] = []
+        self.sub_depot_nodes: List[int] = []
 
     def generate_grid(
         self,
         num_nodes: int,
         num_stations: int = 3,
+        num_sub_depots: int = 2,
         seed: int = 42,
     ) -> None:
         """Generate a grid-like road network with randomized node positions.
@@ -34,6 +36,7 @@ class TransportMap:
         - Depot placed near center of map
         """
         random.seed(seed)
+        self.sub_depot_nodes = []
 
         # Use larger node count for richer map
         if num_nodes < 40:
@@ -131,6 +134,22 @@ class TransportMap:
                 x, y, _ = self.nodes[sid]
                 self.nodes[sid] = (x, y, "station")
                 self.graph.nodes[sid]["type"] = "station"
+
+        # Assign fixed sub-depot nodes after stations to avoid overlap.
+        unavailable = {self.depot_node, *self.station_nodes}
+        sub_depot_candidates = [
+            n for n in self.nodes
+            if n not in unavailable
+            and self.nodes[n][2] == "normal"
+        ]
+        if len(sub_depot_candidates) >= num_sub_depots:
+            self.sub_depot_nodes = sorted(
+                random.sample(sub_depot_candidates, num_sub_depots)
+            )
+            for sid in self.sub_depot_nodes:
+                x, y, _ = self.nodes[sid]
+                self.nodes[sid] = (x, y, "sub_depot")
+                self.graph.nodes[sid]["type"] = "sub_depot"
 
     def _add_edge_if_not_exists(self, u: int, v: int) -> None:
         """Add edge if it doesn't already exist."""

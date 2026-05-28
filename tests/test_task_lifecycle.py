@@ -34,6 +34,8 @@ class SimpleMap:
             return [start, end]
         if {start, end} == {0, 2}:
             return [start, end]
+        if {start, end} == {0, 3}:
+            return [start, end]
         if {start, end} == {1, 3}:
             return [start, 3]
         if {start, end} == {2, 3}:
@@ -102,6 +104,83 @@ class TaskLifecycleTest(unittest.TestCase):
         self.assertEqual(Task.STATUS_COMPLETED, self.task.status)
         self.assertEqual(0.0, self.vehicle.current_load)
         self.assertNotIn(self.task, self.sim.active_tasks)
+
+    def test_depot_delivery_task_reuses_existing_action_lifecycle(self):
+        task = Task(
+            id=4,
+            pickup_node=0,
+            delivery_node=2,
+            weight=8.0,
+            ready_time=0,
+            due_time=100,
+            create_time=0,
+            task_type=Task.TYPE_DEPOT_DELIVERY,
+        )
+        self.vehicle.action_plan = []
+        self.vehicle.carrying_tasks = []
+        self.vehicle.current_load = 0.0
+        self.vehicle.current_node = 0
+        self.vehicle.position = self.sim.map.get_node_position(0)
+        self.vehicle.current_path_nodes = []
+        self.vehicle.current_path_index = 0
+        self.vehicle.progress = 0.0
+        self.vehicle.status = VehicleStatus.IDLE
+        self.sim.active_tasks = [task]
+
+        assigned = NearestFirstScheduler().assign_task(
+            task,
+            [self.vehicle],
+            self.sim.map,
+        )
+
+        self.assertIs(assigned, self.vehicle)
+        self.sim.tick()
+        self.assertEqual(Task.STATUS_PICKING, task.status)
+        self.assertEqual(8.0, self.vehicle.current_load)
+        self.sim.tick()
+        self.assertEqual(Task.STATUS_DELIVERING, task.status)
+        self.sim.tick()
+        self.assertEqual(Task.STATUS_COMPLETED, task.status)
+        self.assertEqual(0.0, self.vehicle.current_load)
+        self.assertNotIn(task, self.sim.active_tasks)
+
+    def test_sub_depot_return_task_reuses_existing_action_lifecycle(self):
+        task = Task(
+            id=5,
+            pickup_node=3,
+            delivery_node=0,
+            weight=8.0,
+            ready_time=0,
+            due_time=100,
+            create_time=0,
+            task_type=Task.TYPE_SUB_DEPOT_RETURN,
+        )
+        self.vehicle.action_plan = []
+        self.vehicle.carrying_tasks = []
+        self.vehicle.current_load = 0.0
+        self.vehicle.current_node = 0
+        self.vehicle.position = self.sim.map.get_node_position(0)
+        self.vehicle.current_path_nodes = []
+        self.vehicle.current_path_index = 0
+        self.vehicle.progress = 0.0
+        self.vehicle.status = VehicleStatus.IDLE
+        self.sim.active_tasks = [task]
+
+        assigned = NearestFirstScheduler().assign_task(
+            task,
+            [self.vehicle],
+            self.sim.map,
+        )
+
+        self.assertIs(assigned, self.vehicle)
+        self.sim.tick()
+        self.assertEqual(3, self.vehicle.current_node)
+        self.assertEqual(Task.STATUS_PICKING, task.status)
+        self.sim.tick()
+        self.assertEqual(0, self.vehicle.current_node)
+        self.assertEqual(Task.STATUS_COMPLETED, task.status)
+        self.assertEqual(0.0, self.vehicle.current_load)
+        self.assertNotIn(task, self.sim.active_tasks)
 
     def test_assigning_to_moving_vehicle_does_not_reset_current_edge(self):
         moving_vehicle = Vehicle(

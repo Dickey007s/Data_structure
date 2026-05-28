@@ -86,9 +86,10 @@ class InsertionScheduler(BaseScheduler):
 
         # Build tentative action plan (pickup -> depot -> deliver)
         new_plan = vehicle.action_plan.copy()
-        new_plan.insert(p_idx, {"type": "pickup", "task": task})
-        new_plan.insert(p_idx + 1, {"type": "move", "target": map_obj.depot_node})
-        new_plan.insert(d_idx + 2, {"type": "deliver", "task": task})
+        actions = self.build_task_actions(task, map_obj)
+        new_plan.insert(p_idx, actions[0])
+        new_plan.insert(p_idx + 1, actions[1])
+        new_plan.insert(d_idx + 2, actions[2])
 
         # Simulate route to calculate total distance
         total_dist = 0.0
@@ -125,9 +126,10 @@ class InsertionScheduler(BaseScheduler):
     ) -> None:
         """Apply the insertion to vehicle's action plan."""
         p_idx, d_idx = insertion
-        vehicle.action_plan.insert(p_idx, {"type": "pickup", "task": task})
-        vehicle.action_plan.insert(p_idx + 1, {"type": "move", "target": map_obj.depot_node})
-        vehicle.action_plan.insert(d_idx + 2, {"type": "deliver", "task": task})
+        actions = self.build_task_actions(task, map_obj)
+        vehicle.action_plan.insert(p_idx, actions[0])
+        vehicle.action_plan.insert(p_idx + 1, actions[1])
+        vehicle.action_plan.insert(d_idx + 2, actions[2])
 
         self.refresh_vehicle_path(vehicle, map_obj)
         task.status = Task.STATUS_ASSIGNED

@@ -62,3 +62,38 @@ assert(
     calls.some(([name]) => name === 'closePath'),
     'depot polygon path should be closed before fill'
 );
+
+const subDepotCalls = [];
+const subDepotCtx = {
+    save() {},
+    restore() {},
+    beginPath() { subDepotCalls.push(['beginPath']); },
+    moveTo(x, y) { subDepotCalls.push(['moveTo', x, y]); },
+    lineTo(x, y) { subDepotCalls.push(['lineTo', x, y]); },
+    closePath() { subDepotCalls.push(['closePath']); },
+    arc(x, y) { subDepotCalls.push(['arc', x, y]); },
+    fill() { subDepotCalls.push(['fill']); },
+    stroke() {},
+    fillText() {},
+    set fillStyle(value) { subDepotCalls.push(['fillStyle', value]); },
+    set shadowColor(value) { subDepotCalls.push(['shadowColor', value]); },
+    set shadowBlur(value) {},
+    set font(value) {},
+    set textAlign(value) {},
+    set textBaseline(value) {},
+};
+
+const subDepotRenderer = Object.create(sandbox.MapRenderer.prototype);
+subDepotRenderer.ctx = subDepotCtx;
+subDepotRenderer.nodes = [{ id: 1, x: 20, y: 30, type: 'sub_depot' }];
+subDepotRenderer.scale = 1;
+subDepotRenderer.offsetX = 0;
+subDepotRenderer.offsetY = 0;
+subDepotRenderer.worldToScreen = (x, y) => ({ x, y });
+
+subDepotRenderer.drawNodes();
+
+assert(
+    subDepotCalls.some(([name, value]) => name === 'fillStyle' && value === '#9b59b6'),
+    'sub-depot should be rendered as a distinct warehouse marker'
+);

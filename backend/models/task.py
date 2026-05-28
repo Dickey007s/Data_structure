@@ -6,6 +6,10 @@ from typing import Optional
 class Task:
     """A delivery task with pickup, delivery, weight and time window."""
 
+    TYPE_PAIRED = "paired"
+    TYPE_DEPOT_DELIVERY = "depot_delivery"
+    TYPE_SUB_DEPOT_RETURN = "sub_depot_return"
+
     STATUS_PENDING = "pending"
     STATUS_ASSIGNED = "assigned"
     STATUS_PICKING = "picking"
@@ -22,10 +26,12 @@ class Task:
         ready_time: int,
         due_time: int,
         create_time: int,
+        task_type: str = TYPE_PAIRED,
     ):
         self.id = id
         self.pickup_node = pickup_node
         self.delivery_node = delivery_node
+        self.task_type = task_type
         self.weight = weight
         self.ready_time = ready_time
         self.due_time = due_time
@@ -56,6 +62,7 @@ class Task:
             "id": self.id,
             "pickup": self.pickup_node,
             "delivery": self.delivery_node,
+            "task_type": self.task_type,
             "weight": round(self.weight, 2),
             "status": self.status,
             "ready_time": self.ready_time,

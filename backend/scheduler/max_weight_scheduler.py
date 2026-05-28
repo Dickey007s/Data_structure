@@ -64,9 +64,7 @@ class MaxWeightScheduler(BaseScheduler):
         map_obj: TransportMap,
     ) -> None:
         """Append task to vehicle's route."""
-        vehicle.action_plan.append({"type": "pickup", "task": task})
-        vehicle.action_plan.append({"type": "move", "target": map_obj.depot_node})
-        vehicle.action_plan.append({"type": "deliver", "task": task})
+        vehicle.action_plan.extend(self.build_task_actions(task, map_obj))
 
         self.refresh_vehicle_path(vehicle, map_obj)
         task.status = Task.STATUS_ASSIGNED

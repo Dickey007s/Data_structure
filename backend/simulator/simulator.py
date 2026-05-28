@@ -64,6 +64,7 @@ class Simulator:
         self.map.generate_grid(
             map_config["num_nodes"],
             num_stations=len(station_config),
+            num_sub_depots=map_config.get("num_sub_depots", 2),
             seed=seed,
         )
 
@@ -98,6 +99,13 @@ class Simulator:
             task_count=self.config.get("task_count", 100),
             time_horizon=self.config.get("time_horizon", 1000),
             map_nodes=list(self.map.nodes.keys()),
+            depot_node=self.map.depot_node,
+            sub_depot_nodes=self.map.sub_depot_nodes,
+            service_nodes=[
+                nid for nid, (_, _, node_type) in self.map.nodes.items()
+                if node_type == "normal"
+            ],
+            single_task_ratio=self.config.get("single_task_ratio", 0.4),
             seed=seed,
         )
         self.event_generator.generate_schedule()
@@ -624,6 +632,7 @@ class Simulator:
                     "id": t.id,
                     "pickup": t.pickup_node,
                     "delivery": t.delivery_node,
+                    "task_type": t.task_type,
                     "weight": round(t.weight, 2),
                     "status": t.status,
                     "ready_time": t.ready_time,

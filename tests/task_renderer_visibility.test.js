@@ -49,3 +49,51 @@ assert(!drawStatus('assigned').includes('fillRect'), 'assigned task should not d
 assert(!drawStatus('picking').includes('fillRect'), 'picking task should not draw delivery marker before depot return');
 assert(drawStatus('delivering').includes('fillRect'), 'delivering task should draw delivery marker');
 assert(!drawStatus('completed').includes('fillRect'), 'completed task should not draw delivery marker');
+
+function drawTask(task) {
+    const { renderer, calls } = makeRenderer();
+    renderer.updateTasks([task]);
+    renderer.render();
+    return calls.map(([name]) => name);
+}
+
+assert(
+    drawTask({
+        id: 2,
+        pickup: 0,
+        delivery: 5,
+        status: 'assigned',
+        task_type: 'depot_delivery',
+    }).includes('fillRect'),
+    'depot delivery task should show its delivery point while assigned'
+);
+assert(
+    !drawTask({
+        id: 2,
+        pickup: 0,
+        delivery: 5,
+        status: 'assigned',
+        task_type: 'depot_delivery',
+    }).includes('fill'),
+    'depot delivery task should not show a pickup marker at the main depot'
+);
+assert(
+    drawTask({
+        id: 3,
+        pickup: 2,
+        delivery: 0,
+        status: 'assigned',
+        task_type: 'sub_depot_return',
+    }).includes('fill'),
+    'sub-depot return task should show the sub-depot pickup point while assigned'
+);
+assert(
+    !drawTask({
+        id: 3,
+        pickup: 2,
+        delivery: 0,
+        status: 'picking',
+        task_type: 'sub_depot_return',
+    }).includes('fillRect'),
+    'sub-depot return task should not show a delivery marker at the main depot'
+);

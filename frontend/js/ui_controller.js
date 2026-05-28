@@ -464,15 +464,23 @@ class UIController {
     }
 
     updateLists(state) {
+        const taskTypeMap = {
+            'depot_delivery': '单点送货',
+            'sub_depot_return': '仓库取货',
+            'paired': '分拣派送'
+        };
+
         // Task list (show last 10)
         const taskList = document.getElementById('task-list');
         const recentTasks = state.tasks.slice(-10);
-        taskList.innerHTML = recentTasks.map(t => `
+        taskList.innerHTML = recentTasks.map(t => {
+            const typeLabel = taskTypeMap[t.task_type] || '分拣派送';
+            return `
             <div class="list-item">
-                <span>任务 ${t.id}</span>
+                <span>任务${t.id} ${typeLabel}</span>
                 <span class="badge badge-${t.status}">${t.status}</span>
             </div>
-        `).join('');
+        `;}).join('');
 
         // Station list
         const stationList = document.getElementById('station-list');

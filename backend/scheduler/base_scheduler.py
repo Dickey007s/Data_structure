@@ -61,6 +61,11 @@ class BaseScheduler(ABC):
         vehicle.current_path_nodes = [vehicle.current_node]
         current = vehicle.current_node
 
+        if vehicle.action_plan and self.get_action_target(vehicle.action_plan[0]) == current:
+            vehicle.current_path_index = 0
+            vehicle.progress = 0.0
+            return
+
         for action in vehicle.action_plan:
             target = self.get_action_target(action)
             if target is None:
@@ -77,6 +82,14 @@ class BaseScheduler(ABC):
         vehicle.current_path_index = 0
         if len(vehicle.current_path_nodes) > 1:
             vehicle.status = type(vehicle.status).MOVING
+
+    def build_task_actions(self, task, map_obj) -> List[dict]:
+        """Build the physical route actions for any supported task type."""
+        return [
+            {"type": "pickup", "task": task},
+            {"type": "move", "target": map_obj.depot_node},
+            {"type": "deliver", "task": task},
+        ]
 
     def get_action_target(self, action: dict):
         """Return the target node for a route action."""

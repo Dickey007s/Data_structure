@@ -144,20 +144,6 @@ class VehicleRenderer {
                 this.ctx.lineTo(pos.x, pos.y);
             }
             this.ctx.stroke();
-        } else if (vehicle.next_target != null && vehicle.next_target !== vehicle.node) {
-            // Preview line to next target when idle but has pending action
-            this.ctx.strokeStyle = 'rgba(30, 120, 200, 0.75)';
-            this.ctx.beginPath();
-            const displayPosition = this.getDisplayPosition(vehicle);
-            const start = this.mapRenderer.worldToScreen(
-                displayPosition[0], displayPosition[1]
-            );
-            const end = this.mapRenderer.worldToScreen(
-                ...this.mapRenderer.getNodePosition(vehicle.next_target)
-            );
-            this.ctx.moveTo(start.x, start.y);
-            this.ctx.lineTo(end.x, end.y);
-            this.ctx.stroke();
         }
 
         this.ctx.restore();
