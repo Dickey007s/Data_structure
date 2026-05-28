@@ -87,22 +87,15 @@ class InsertionScheduler(BaseScheduler):
         # Build tentative action plan (pickup -> depot -> deliver)
         new_plan = vehicle.action_plan.copy()
         actions = self.build_task_actions(task, map_obj)
-        new_plan.insert(p_idx, actions[0])
-        new_plan.insert(p_idx + 1, actions[1])
-        new_plan.insert(d_idx + 2, actions[2])
+        self._insert_actions_into_plan(new_plan, actions, p_idx, d_idx)
 
         # Simulate route to calculate total distance
         total_dist = 0.0
         current_node = vehicle.current_node
 
         for action in new_plan:
-            if action["type"] == "pickup":
-                target = action["task"].pickup_node
-            elif action["type"] == "deliver":
-                target = action["task"].delivery_node
-            elif action["type"] == "move":
-                target = action["target"]
-            else:
+            target = self.get_action_target(action)
+            if target is None:
                 continue
 
             dist = map_obj.get_distance(current_node, target)
@@ -127,13 +120,17 @@ class InsertionScheduler(BaseScheduler):
         """Apply the insertion to vehicle's action plan."""
         p_idx, d_idx = insertion
         actions = self.build_task_actions(task, map_obj)
-        vehicle.action_plan.insert(p_idx, actions[0])
-        vehicle.action_plan.insert(p_idx + 1, actions[1])
-        vehicle.action_plan.insert(d_idx + 2, actions[2])
+        self._insert_actions_into_plan(vehicle.action_plan, actions, p_idx, d_idx)
 
         self.refresh_vehicle_path(vehicle, map_obj)
         task.status = Task.STATUS_ASSIGNED
         task.assigned_vehicle = vehicle.id
+
+    def _insert_actions_into_plan(self, plan, actions, p_idx, d_idx):
+        """Insert pickup, move, and deliver actions into plan at given indices."""
+        plan.insert(p_idx, actions[0])
+        plan.insert(p_idx + 1, actions[1])
+        plan.insert(d_idx + 2, actions[2])
 
     def replan(self, fleet: List[Vehicle], active_tasks: List[Task], map_obj: TransportMap) -> None:
         """Periodic re-optimization (placeholder for future improvement)."""

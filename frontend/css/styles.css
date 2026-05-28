@@ -78,8 +78,27 @@ body {
 }
 
 .info-panel {
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
     border-right: none;
     border-left: 1px solid var(--border);
+}
+
+.info-panel .panel-section:first-child {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.info-panel .panel-section:first-child #task-list {
+    flex: 1;
+    overflow-y: auto;
+    max-height: none;
 }
 
 .panel-section {
@@ -248,7 +267,7 @@ input, select {
 }
 
 .scrollable-list {
-    max-height: 1200px;
+    max-height: 800px;
     overflow-y: auto;
     font-size: 0.8rem;
 }

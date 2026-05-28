@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from backend.models.task import Task
+
 
 class BaseScheduler(ABC):
     """Abstract base class for task scheduling strategies."""
@@ -91,7 +93,8 @@ class BaseScheduler(ABC):
             {"type": "deliver", "task": task},
         ]
 
-    def get_action_target(self, action: dict):
+    @staticmethod
+    def get_action_target(action: dict):
         """Return the target node for a route action."""
         action_type = action.get("type")
         if action_type == "pickup":
@@ -125,4 +128,11 @@ class BaseScheduler(ABC):
     def check_time_window(self, vehicle, task, arrival_time: int) -> bool:
         """Check if arrival time satisfies task time window."""
         return arrival_time <= task.due_time
+
+    def _commit_assignment(self, vehicle, task, map_obj) -> None:
+        """Append task actions to vehicle plan and update task state."""
+        vehicle.action_plan.extend(self.build_task_actions(task, map_obj))
+        self.refresh_vehicle_path(vehicle, map_obj)
+        task.status = Task.STATUS_ASSIGNED
+        task.assigned_vehicle = vehicle.id
 

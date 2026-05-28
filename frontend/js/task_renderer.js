@@ -1,6 +1,12 @@
 /**
  * TaskRenderer - Renders task markers (pickup/delivery points)
  */
+const TASK_TYPE = {
+    PAIRED: 'paired',
+    DEPOT_DELIVERY: 'depot_delivery',
+    SUB_DEPOT_RETURN: 'sub_depot_return'
+};
+
 class TaskRenderer {
     constructor(ctx, mapRenderer) {
         this.ctx = ctx;
@@ -27,12 +33,12 @@ class TaskRenderer {
             ...this.mapRenderer.getNodePosition(task.delivery)
         );
         const scale = Math.min(this.mapRenderer.scale, 2);
-        const taskType = task.task_type || 'paired';
+        const taskType = task.task_type || TASK_TYPE.PAIRED;
 
         this.ctx.save();
 
         // 单点送货：大仓库 → 送货点，只显示粉色送货方块
-        if (taskType === 'depot_delivery') {
+        if (taskType === TASK_TYPE.DEPOT_DELIVERY) {
             if (task.status !== 'completed' && task.status !== 'timeout') {
                 this.drawPinkSquare(deliveryPos.x, deliveryPos.y, scale);
             }
@@ -41,7 +47,7 @@ class TaskRenderer {
         }
 
         // 仓库取货：子仓库 → 大仓库，不显示额外标记（子仓库本身有菱形标记）
-        if (taskType === 'sub_depot_return') {
+        if (taskType === TASK_TYPE.SUB_DEPOT_RETURN) {
             this.ctx.restore();
             return;
         }
@@ -65,20 +71,20 @@ class TaskRenderer {
         this.drawTriangle(x, y, Math.max(5, 7 * scale));
     }
 
-    drawDeliverySquare(x, y, scale) {
+    _drawSquare(x, y, scale, color, shadowColor) {
         const sz = Math.max(4, 6 * scale);
-        this.ctx.fillStyle = '#e74c3c';
+        this.ctx.fillStyle = color;
         this.ctx.shadowBlur = 4;
-        this.ctx.shadowColor = 'rgba(231, 76, 60, 0.4)';
+        this.ctx.shadowColor = shadowColor;
         this.ctx.fillRect(x - sz, y - sz, sz * 2, sz * 2);
     }
 
+    drawDeliverySquare(x, y, scale) {
+        this._drawSquare(x, y, scale, '#e74c3c', 'rgba(231, 76, 60, 0.4)');
+    }
+
     drawPinkSquare(x, y, scale) {
-        const sz = Math.max(4, 6 * scale);
-        this.ctx.fillStyle = '#ff69b4';
-        this.ctx.shadowBlur = 4;
-        this.ctx.shadowColor = 'rgba(255, 105, 180, 0.4)';
-        this.ctx.fillRect(x - sz, y - sz, sz * 2, sz * 2);
+        this._drawSquare(x, y, scale, '#ff69b4', 'rgba(255, 105, 180, 0.4)');
     }
 
     drawTriangle(x, y, size) {

@@ -319,7 +319,7 @@ class Simulator:
                 return True
             return False
 
-        target = self._get_action_target(vehicle.action_plan[0])
+        target = BaseScheduler.get_action_target(vehicle.action_plan[0])
         if target is None or target == vehicle.current_node:
             return False
 
@@ -336,7 +336,7 @@ class Simulator:
         """Consume route actions whose target is the node just reached."""
         while vehicle.action_plan:
             action = vehicle.action_plan[0]
-            target = self._get_action_target(action)
+            target = BaseScheduler.get_action_target(action)
             if target != vehicle.current_node:
                 break
 
@@ -361,17 +361,6 @@ class Simulator:
                 break
 
         return True
-
-    def _get_action_target(self, action: dict) -> Optional[int]:
-        """Return the node at which an action should be consumed."""
-        action_type = action.get("type")
-        if action_type == "pickup":
-            return action["task"].pickup_node
-        if action_type == "deliver":
-            return action["task"].delivery_node
-        if action_type in ("move", "depot_return"):
-            return action["target"]
-        return None
 
     def _pickup_task(self, vehicle: Vehicle, task: Task) -> bool:
         """Mark a task picked up at its pickup node."""

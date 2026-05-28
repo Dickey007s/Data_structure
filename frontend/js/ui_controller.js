@@ -465,9 +465,9 @@ class UIController {
 
     updateLists(state) {
         const taskTypeMap = {
-            'depot_delivery': '单点送货',
-            'sub_depot_return': '仓库取货',
-            'paired': '分拣派送'
+            [TASK_TYPE.DEPOT_DELIVERY]: '单点送货',
+            [TASK_TYPE.SUB_DEPOT_RETURN]: '仓库取货',
+            [TASK_TYPE.PAIRED]: '分拣派送'
         };
 
         // Task list (show last 10)

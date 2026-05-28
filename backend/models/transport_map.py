@@ -129,11 +129,7 @@ class TransportMap:
                 and margin_y <= self.nodes[n][1] <= self.height - margin_y
             ]
             pool = candidates if len(candidates) >= num_stations else non_depot
-            self.station_nodes = sorted(random.sample(pool, num_stations))
-            for sid in self.station_nodes:
-                x, y, _ = self.nodes[sid]
-                self.nodes[sid] = (x, y, "station")
-                self.graph.nodes[sid]["type"] = "station"
+            self.station_nodes = self._assign_special_nodes(pool, num_stations, "station")
 
         # Assign fixed sub-depot nodes after stations to avoid overlap.
         unavailable = {self.depot_node, *self.station_nodes}
@@ -143,13 +139,18 @@ class TransportMap:
             and self.nodes[n][2] == "normal"
         ]
         if len(sub_depot_candidates) >= num_sub_depots:
-            self.sub_depot_nodes = sorted(
-                random.sample(sub_depot_candidates, num_sub_depots)
+            self.sub_depot_nodes = self._assign_special_nodes(
+                sub_depot_candidates, num_sub_depots, "sub_depot"
             )
-            for sid in self.sub_depot_nodes:
-                x, y, _ = self.nodes[sid]
-                self.nodes[sid] = (x, y, "sub_depot")
-                self.graph.nodes[sid]["type"] = "sub_depot"
+
+    def _assign_special_nodes(self, candidates, count, node_type):
+        """Randomly select and assign a special node type from candidates."""
+        selected = sorted(random.sample(candidates, count))
+        for nid in selected:
+            x, y, _ = self.nodes[nid]
+            self.nodes[nid] = (x, y, node_type)
+            self.graph.nodes[nid]["type"] = node_type
+        return selected
 
     def _add_edge_if_not_exists(self, u: int, v: int) -> None:
         """Add edge if it doesn't already exist."""

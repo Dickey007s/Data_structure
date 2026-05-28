@@ -64,11 +64,7 @@ class MaxWeightScheduler(BaseScheduler):
         map_obj: TransportMap,
     ) -> None:
         """Append task to vehicle's route."""
-        vehicle.action_plan.extend(self.build_task_actions(task, map_obj))
-
-        self.refresh_vehicle_path(vehicle, map_obj)
-        task.status = Task.STATUS_ASSIGNED
-        task.assigned_vehicle = vehicle.id
+        self._commit_assignment(vehicle, task, map_obj)
 
     def replan(self, fleet: List[Vehicle], active_tasks: List[Task], map_obj: TransportMap) -> None:
         """Greedy strategy does not support replanning."""
